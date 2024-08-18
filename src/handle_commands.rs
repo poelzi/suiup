@@ -61,14 +61,14 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             let filename = if let Some(version) = version {
                 download_release_at_version(&network.to_string(), &version).await?
             } else {
-                download_release(&network.to_string())
+                download_latest_release(&network.to_string())
                     .await
                     .map_err(|_| anyhow!("Could not download latest release"))?
             };
             let version = extract_version_from_release(&filename)?;
             for binary in &name {
                 if !check_if_binaries_exist(binary, &network, &version)? {
-                    println!("Adding component: {version}-{binary}");
+                    println!("Adding component: {binary}-{version}");
                     extract_component(binary, network, &filename)
                         .map_err(|_| anyhow!("Could not extract component"))?;
                 } else {
@@ -97,11 +97,13 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                             {
                                 let binary_name = format!("{}.exe", binary_name);
                             }
+                            println!("{:?}", path.display());
                             std::fs::remove_file(path)?;
 
                             // remove from default-bin folder
                             let mut path = default_bin_folder()?;
-                            path.push(&binary_name);
+                            path.push(&binary.binary_name);
+                            println!("{:?}", path.display());
                             std::fs::remove_file(path)?;
 
                             // update default version file
@@ -109,6 +111,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                             let mut default: HashMap<String, (Network, Version)> =
                                 serde_json::from_str(&default)?;
                             default.remove(&binary_name);
+                            println!("{:?}", default);
                             let mut file = File::create(default_file_path()?)?;
                             file.write_all(serde_json::to_string(&default)?.as_bytes())?;
                         }
@@ -120,229 +123,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
     Ok(())
 }
 
-pub fn handle_update() {
-    println!("Updating components...");
-    // Implement the update logic here
-}
-
-pub fn handle_override() {
-    println!("Overriding project’s CLI version...");
-    // Implement the override logic here
-}
-
-pub fn handle_which() -> Result<(), Error> {
-    let default_bin = default_bin_folder()?;
-    println!("Active CLI binary: {}", default_bin.display());
-    // Implement displaying the path to the active CLI binary here
-    Ok(())
-}
-
-async fn release_list() -> Result<Vec<Release>, anyhow::Error> {
-    let client = Client::new();
-    let release_url = format!("https://api.github.com/repos/{}/releases", GITHUB_REPO);
-    let releases: Vec<Release> = client
-        .get(&release_url)
-        .header("User-Agent", "suiup")
-        .send()
-        .await?
-        .json()
-        .await?;
-
-    Ok(releases)
-}
-
-async fn find_last_release_by_network(releases: Vec<Release>, network: &str) -> Option<Release> {
-    releases
-        .into_iter()
-        .find(|r| r.assets.iter().any(|a| a.name.contains(network)))
-}
-
-fn detect_os_arch() -> Result<(String, String), Error> {
-    let os = match whoami::platform() {
-        whoami::Platform::Linux => "linux",
-        whoami::Platform::Windows => "windows",
-        whoami::Platform::MacOS => "macos",
-        _ => anyhow::bail!("Unsupported OS. Supported only: Linux, Windows, MacOS"),
-    };
-    let arch = match std::env::consts::ARCH {
-        "x86_64" => "x86_64",
-        "aarch64" => "arm64",
-        _ => anyhow::bail!("Unsupported architecture. Supported only: x86_64, aarch64"),
-    };
-
-    println!("Detected: {os}-{arch}...");
-    Ok((os.to_string(), arch.to_string()))
-}
-
-async fn download_release_at_version(
-    network: &str,
-    version: &str,
-) -> Result<String, anyhow::Error> {
-    let (os, arch) = detect_os_arch()?;
-
-    let tag = format!("{}-{}", network, version);
-
-    println!("Searching for release with tag: {}...", tag);
-    let client = Client::new();
-    let release_url = format!(
-        "https://api.github.com/repos/{}/releases/tags/{tag}",
-        GITHUB_REPO
-    );
-    let response = client
-        .get(&release_url)
-        .header("User-Agent", "suiup")
-        .send()
-        .await?;
-    if !response.status().is_success() {
-        anyhow::bail!("release {tag} not found");
-    }
-
-    let release: Release = response.json().await?;
-    download_asset_from_github(&release, network, &os, &arch).await
-}
-
-async fn download_release(network: &str) -> Result<String, anyhow::Error> {
-    let releases = release_list().await?;
-
-    let (os, arch) = detect_os_arch()?;
-
-    let last_release = find_last_release_by_network(releases, network)
-        .await
-        .ok_or_else(|| anyhow!("Could not find last release"))?;
-
-    println!(
-        "Last {network} release: {}",
-        extract_version_from_release(&last_release.assets[0].name)?
-    );
-
-    download_asset_from_github(&last_release, network, &os, &arch).await
-}
-
-async fn download_asset_from_github(
-    release: &Release,
-    network: &str,
-    os: &str,
-    arch: &str,
-) -> Result<String, anyhow::Error> {
-    let asset = release
-        .assets
-        .iter()
-        .find(|&a| a.name.contains(arch) && a.name.contains(os.to_string().to_lowercase().as_str()))
-        .ok_or_else(|| anyhow!("Asset not found"))?;
-
-    // Find the archive file for the current OS and architecture
-
-    let path = release_archive_folder()?;
-    let mut file_path = path.clone();
-    file_path.push(&asset.name);
-    if file_path.exists() {
-        println!("Found release archive {} in cache", asset.name);
-        return Ok(asset.name.to_string());
-    }
-
-    println!("Downloading {network} release: {}...", asset.name);
-    let downloads = vec![Download::try_from(asset.browser_download_url.as_str()).unwrap()];
-    let downloader = DownloaderBuilder::new().directory(path).build();
-    downloader.download(&downloads).await;
-
-    Ok(asset.name.to_string())
-}
-
-fn extract_component(binary: &str, network: Network, filename: &str) -> Result<(), Error> {
-    let mut archive_path = release_archive_folder()?;
-    archive_path.push(filename);
-
-    let file = File::open(archive_path.as_path())?;
-    let tar = GzDecoder::new(file);
-    let mut archive = Archive::new(tar);
-
-    #[cfg(target_os = "windows")]
-    let binary = format!("{}.exe", binary);
-
-    // Check if the current entry matches the file name
-    for file in archive.entries()? {
-        let mut f = file.unwrap();
-        if f.path()?.file_name() == Some(std::ffi::OsStr::new(&binary)) {
-            println!("Extracting file: {}", &binary);
-
-            let mut output_path = binaries_folder()?;
-            output_path.push(network.to_string());
-            if !output_path.is_dir() {
-                std::fs::create_dir_all(output_path.as_path())?;
-            }
-            let binary_version = format!("{}-{}", binary, extract_version_from_release(filename)?);
-            output_path.push(&binary_version);
-            let mut output_file = File::create(&output_path)?;
-
-            std::io::copy(&mut f, &mut output_file)?;
-            println!(" '{}' extracted successfully!", &binary);
-            #[cfg(not(target_os = "windows"))]
-            {
-                // Retrieve and apply the original file permissions on Unix-like systems
-                if let Ok(permissions) = f.header().mode() {
-                    set_permissions(output_path, PermissionsExt::from_mode(permissions))?;
-                }
-            }
-            break;
-        }
-    }
-
-    Ok(())
-}
-
-pub(crate) fn extract_version_from_release(release: &str) -> Result<String, Error> {
-    let re = regex::Regex::new(r"v\d+\.\d+\.\d+").unwrap();
-    let captures = re
-        .captures(release)
-        .ok_or_else(|| anyhow!("Could not extract version from release"))?;
-
-    Ok(captures.get(0).unwrap().as_str().to_string())
-}
-
-fn config_folder_or_create() -> Result<PathBuf, anyhow::Error> {
-    let mut path = std::path::PathBuf::new();
-
-    let home_dir = dirs::home_dir().ok_or_else(|| anyhow!("Could not find home directory"))?;
-    path.push(home_dir);
-    path.push(SUIUP_FOLDER);
-    if !path.is_dir() {
-        std::fs::create_dir_all(path.as_path())
-            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
-    }
-
-    Ok(path)
-}
-
-fn default_bin_folder() -> Result<PathBuf, anyhow::Error> {
-    let mut path = config_folder_or_create()?;
-    path.push(DEFAULT_BIN_FOLDER);
-    if !path.is_dir() {
-        std::fs::create_dir_all(path.as_path())
-            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
-    }
-    Ok(path)
-}
-
-fn release_archive_folder() -> Result<PathBuf, anyhow::Error> {
-    let mut path = config_folder_or_create()?;
-    path.push(RELEASES_ARCHIVES_FOLDER);
-    if !path.is_dir() {
-        std::fs::create_dir_all(path.as_path())
-            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
-    }
-    Ok(path)
-}
-
-fn binaries_folder() -> Result<PathBuf, anyhow::Error> {
-    let mut path = config_folder_or_create()?;
-    path.push(BINARIES_FOLDER);
-    if !path.is_dir() {
-        std::fs::create_dir_all(path.as_path())
-            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
-    }
-    Ok(path)
-}
-
+/// Handles the default commands
 pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
     match cmd {
         DefaultCommands::Get => {
@@ -385,7 +166,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                 {
                     let n = format!("{}.exe", n);
                 }
-                dst.push(&n);
+                dst.push(n);
 
                 let mut src = binaries_folder()?;
                 src.push(network.to_string());
@@ -405,6 +186,276 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
     Ok(())
 }
 
+/// Handles the `show` command
+pub fn handle_show() -> Result<(), Error> {
+    let default = std::fs::read_to_string(default_file_path()?)?;
+    let default: HashMap<String, (Network, Version)> = serde_json::from_str(&default)?;
+    let default_binaries = Binaries::from(default);
+
+    println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");
+
+    let installed_binaries = installed_binaries_grouped_by_network()?;
+
+    println!("\x1b[1mInstalled binaries:\x1b[0m");
+
+    for (network, binaries) in installed_binaries {
+        println!("[{network} release]");
+        for binary in binaries {
+            println!("    {binary}");
+        }
+    }
+
+    Ok(())
+}
+
+/// Handles the `update` command
+pub fn handle_update() {
+    println!("Updating components...");
+    // Implement the update logic here
+}
+
+/// Handles the `override` command
+pub fn handle_override() {
+    println!("Overriding project’s CLI version...");
+    // Implement the override logic here
+}
+
+/// Handles the `which` command
+pub fn handle_which() -> Result<(), Error> {
+    let default_bin = default_bin_folder()?;
+    println!("Active CLI binary: {}", default_bin.display());
+    // Implement displaying the path to the active CLI binary here
+    Ok(())
+}
+
+/// Fetches the list of releases from the GitHub repository
+async fn release_list() -> Result<Vec<Release>, anyhow::Error> {
+    let client = Client::new();
+    let release_url = format!("https://api.github.com/repos/{}/releases", GITHUB_REPO);
+    let releases: Vec<Release> = client
+        .get(&release_url)
+        .header("User-Agent", "suiup")
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    Ok(releases)
+}
+
+/// Finds the last release for a given network
+async fn find_last_release_by_network(releases: Vec<Release>, network: &str) -> Option<Release> {
+    releases
+        .into_iter()
+        .find(|r| r.assets.iter().any(|a| a.name.contains(network)))
+}
+
+/// Detects the current OS and architecture
+fn detect_os_arch() -> Result<(String, String), Error> {
+    let os = match whoami::platform() {
+        whoami::Platform::Linux => "linux",
+        whoami::Platform::Windows => "windows",
+        whoami::Platform::MacOS => "macos",
+        _ => anyhow::bail!("Unsupported OS. Supported only: Linux, Windows, MacOS"),
+    };
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
+        "aarch64" => "arm64",
+        _ => anyhow::bail!("Unsupported architecture. Supported only: x86_64, aarch64"),
+    };
+
+    println!("Detected: {os}-{arch}...");
+    Ok((os.to_string(), arch.to_string()))
+}
+
+/// Downloads a release with a specific version
+/// The network is used to filter the release
+async fn download_release_at_version(
+    network: &str,
+    version: &str,
+) -> Result<String, anyhow::Error> {
+    let (os, arch) = detect_os_arch()?;
+
+    let tag = format!("{}-{}", network, version);
+
+    println!("Searching for release with tag: {}...", tag);
+    let client = Client::new();
+    let release_url = format!(
+        "https://api.github.com/repos/{}/releases/tags/{tag}",
+        GITHUB_REPO
+    );
+    let response = client
+        .get(&release_url)
+        .header("User-Agent", "suiup")
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        anyhow::bail!("release {tag} not found");
+    }
+
+    let release: Release = response.json().await?;
+    download_asset_from_github(&release, network, &os, &arch).await
+}
+
+/// Downloads the latest release for a given network
+async fn download_latest_release(network: &str) -> Result<String, anyhow::Error> {
+    let releases = release_list().await?;
+
+    let (os, arch) = detect_os_arch()?;
+
+    let last_release = find_last_release_by_network(releases, network)
+        .await
+        .ok_or_else(|| anyhow!("Could not find last release"))?;
+
+    println!(
+        "Last {network} release: {}",
+        extract_version_from_release(&last_release.assets[0].name)?
+    );
+
+    download_asset_from_github(&last_release, network, &os, &arch).await
+}
+
+/// Downloads the archived release from GitHub and returns the file name
+/// The `network, os, and arch` parameters are used to retrieve the correct release for the target
+/// architecture and OS
+async fn download_asset_from_github(
+    release: &Release,
+    network: &str,
+    os: &str,
+    arch: &str,
+) -> Result<String, anyhow::Error> {
+    let asset = release
+        .assets
+        .iter()
+        .find(|&a| a.name.contains(arch) && a.name.contains(os.to_string().to_lowercase().as_str()))
+        .ok_or_else(|| anyhow!("Asset not found"))?;
+
+    // Find the archive file for the current OS and architecture
+
+    let path = release_archive_folder()?;
+    let mut file_path = path.clone();
+    file_path.push(&asset.name);
+    if file_path.exists() {
+        println!("Found release archive {} in cache", asset.name);
+        return Ok(asset.name.to_string());
+    }
+
+    println!("Downloading {network} release: {}...", asset.name);
+    let downloads = vec![Download::try_from(asset.browser_download_url.as_str()).unwrap()];
+    let downloader = DownloaderBuilder::new().directory(path).build();
+    downloader.download(&downloads).await;
+
+    Ok(asset.name.to_string())
+}
+
+/// Extracts a component from the release archive. The component's name is identified by the
+/// `binary` parameter.
+///
+/// This extracts the component to the binaries folder under the network from which release comes
+/// from, and sets the correct permissions for Unix based systems.
+fn extract_component(binary: &str, network: Network, filename: &str) -> Result<(), Error> {
+    let mut archive_path = release_archive_folder()?;
+    archive_path.push(filename);
+
+    let file = File::open(archive_path.as_path())?;
+    let tar = GzDecoder::new(file);
+    let mut archive = Archive::new(tar);
+
+    #[cfg(target_os = "windows")]
+    let binary = format!("{}.exe", binary);
+
+    // Check if the current entry matches the file name
+    for file in archive.entries()? {
+        let mut f = file.unwrap();
+        if f.path()?.file_name() == Some(std::ffi::OsStr::new(&binary)) {
+            println!("Extracting file: {}", &binary);
+
+            let mut output_path = binaries_folder()?;
+            output_path.push(network.to_string());
+            if !output_path.is_dir() {
+                std::fs::create_dir_all(output_path.as_path())?;
+            }
+            let binary_version = format!("{}-{}", binary, extract_version_from_release(filename)?);
+            output_path.push(&binary_version);
+            let mut output_file = File::create(&output_path)?;
+
+            std::io::copy(&mut f, &mut output_file)?;
+            println!(" '{}' extracted successfully!", &binary);
+            #[cfg(not(target_os = "windows"))]
+            {
+                // Retrieve and apply the original file permissions on Unix-like systems
+                if let Ok(permissions) = f.header().mode() {
+                    set_permissions(output_path, PermissionsExt::from_mode(permissions))?;
+                }
+            }
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+/// Extracts the version from a release filename
+pub(crate) fn extract_version_from_release(release: &str) -> Result<String, Error> {
+    let re = regex::Regex::new(r"v\d+\.\d+\.\d+").unwrap();
+    let captures = re
+        .captures(release)
+        .ok_or_else(|| anyhow!("Could not extract version from release"))?;
+
+    Ok(captures.get(0).unwrap().as_str().to_string())
+}
+
+/// Returns the path to the Suiup configuration folder. The folder is created if it does not exist.
+fn config_folder_or_create() -> Result<PathBuf, anyhow::Error> {
+    let mut path = std::path::PathBuf::new();
+
+    let home_dir = dirs::home_dir().ok_or_else(|| anyhow!("Could not find home directory"))?;
+    path.push(home_dir);
+    path.push(SUIUP_FOLDER);
+    if !path.is_dir() {
+        std::fs::create_dir_all(path.as_path())
+            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
+    }
+
+    Ok(path)
+}
+
+/// Returns the path to the default binaries folder. The folder is created if it does not exist.
+fn default_bin_folder() -> Result<PathBuf, anyhow::Error> {
+    let mut path = config_folder_or_create()?;
+    path.push(DEFAULT_BIN_FOLDER);
+    if !path.is_dir() {
+        std::fs::create_dir_all(path.as_path())
+            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
+    }
+    Ok(path)
+}
+
+/// Returns the path to the releases archives folder. The folder is created if it does not exist.
+/// This is used to cache the release archives.
+fn release_archive_folder() -> Result<PathBuf, anyhow::Error> {
+    let mut path = config_folder_or_create()?;
+    path.push(RELEASES_ARCHIVES_FOLDER);
+    if !path.is_dir() {
+        std::fs::create_dir_all(path.as_path())
+            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
+    }
+    Ok(path)
+}
+
+/// Returns the path to the binaries folder. The folder is created if it does not exist.
+fn binaries_folder() -> Result<PathBuf, anyhow::Error> {
+    let mut path = config_folder_or_create()?;
+    path.push(BINARIES_FOLDER);
+    if !path.is_dir() {
+        std::fs::create_dir_all(path.as_path())
+            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
+    }
+    Ok(path)
+}
+
+/// Prompts the user and asks if they want to update the default version with the one that was just
+/// installed.
 fn update_after_install(name: &Vec<String>, network: Network, version: &str) -> Result<(), Error> {
     let prompt = "Do you want to set this new installed version as the default one? (y/n) ";
 
@@ -456,6 +507,7 @@ fn update_after_install(name: &Vec<String>, network: Network, version: &str) -> 
     Ok(())
 }
 
+/// Updates the default version file with the new installed version.
 fn update_default_version_file(
     binaries: &Vec<String>,
     network: Network,
@@ -483,6 +535,7 @@ fn update_default_version_file(
     Ok(())
 }
 
+/// Checks if the binaries exist in the binaries folder
 fn check_if_binaries_exist(binary: &str, network: &Network, version: &str) -> Result<bool, Error> {
     let mut path = binaries_folder()?;
     path.push(network.to_string());
@@ -495,27 +548,7 @@ fn check_if_binaries_exist(binary: &str, network: &Network, version: &str) -> Re
     Ok(path.exists())
 }
 
-pub fn handle_show() -> Result<(), Error> {
-    let default = std::fs::read_to_string(default_file_path()?)?;
-    let default: HashMap<String, (Network, Version)> = serde_json::from_str(&default)?;
-    let default_binaries = Binaries::from(default);
-
-    println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");
-
-    let installed_binaries = installed_binaries_grouped_by_network()?;
-
-    println!("\x1b[1mInstalled binaries:\x1b[0m");
-
-    for (network, binaries) in installed_binaries {
-        println!("[{network}]");
-        for binary in binaries {
-            println!("    {binary}");
-        }
-    }
-
-    Ok(())
-}
-
+/// Returns the path to the default version file. The file is created if it does not exist.
 fn default_file_path() -> Result<PathBuf, Error> {
     let mut path = config_folder_or_create()?;
     path.push(DEFAULT_VERSION_FILENAME);
@@ -529,6 +562,7 @@ fn default_file_path() -> Result<PathBuf, Error> {
     Ok(path)
 }
 
+/// Returns a map of installed binaries grouped by network releases
 fn installed_binaries_grouped_by_network() -> Result<HashMap<String, Vec<BinaryVersion>>, Error> {
     let mut files_by_folder: HashMap<String, Vec<BinaryVersion>> = HashMap::new();
     let mut folders = Vec::new();
