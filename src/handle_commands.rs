@@ -42,7 +42,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
         }
         ComponentCommands::Add {
             name,
-            network,
+            network_release: network,
             version,
         } => {
             if name.is_empty() {
@@ -86,6 +86,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 println!("Removing component: {}", n);
                 let installed_binaries = installed_binaries_grouped_by_network()?;
                 for (network, binaries) in installed_binaries {
+                    println!("[{network} release]");
                     for binary in binaries {
                         if binary.binary_name == n {
                             // remove from binaries folder
@@ -104,16 +105,19 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                             let mut path = default_bin_folder()?;
                             path.push(&binary.binary_name);
                             println!("{:?}", path.display());
-                            std::fs::remove_file(path)?;
+                            if path.exists() {
+                                std::fs::remove_file(path)?;
+                            }
 
                             // update default version file
                             let default = std::fs::read_to_string(default_file_path()?)?;
                             let mut default: HashMap<String, (Network, Version)> =
                                 serde_json::from_str(&default)?;
-                            default.remove(&binary_name);
-                            println!("{:?}", default);
-                            let mut file = File::create(default_file_path()?)?;
-                            file.write_all(serde_json::to_string(&default)?.as_bytes())?;
+                            if default.contains_key(&binary.binary_name) {
+                                default.remove(&binary.binary_name);
+                                let mut file = File::create(default_file_path()?)?;
+                                file.write_all(serde_json::to_string(&default)?.as_bytes())?;
+                            }
                         }
                     }
                 }
@@ -135,7 +139,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
 
         DefaultCommands::Set {
             name,
-            network,
+            network_release: network,
             version,
         } => {
             // a map of network --> to BinaryVersion
@@ -145,7 +149,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                 for binary in &name {
                     let b = BinaryVersion {
                         binary_name: binary.to_string(),
-                        network,
+                        network_release: network,
                         version: version.to_string(),
                     };
                     if !binaries.contains(&b) {
@@ -223,7 +227,7 @@ pub fn handle_override() {
 /// Handles the `which` command
 pub fn handle_which() -> Result<(), Error> {
     let default_bin = default_bin_folder()?;
-    println!("Active CLI binary: {}", default_bin.display());
+    println!("Default binaries path: {}", default_bin.display());
     // Implement displaying the path to the active CLI binary here
     Ok(())
 }
@@ -457,7 +461,7 @@ fn binaries_folder() -> Result<PathBuf, anyhow::Error> {
 /// Prompts the user and asks if they want to update the default version with the one that was just
 /// installed.
 fn update_after_install(name: &Vec<String>, network: Network, version: &str) -> Result<(), Error> {
-    let prompt = "Do you want to set this new installed version as the default one? (y/n) ";
+    let prompt = "Do you want to set this new installed version as the default one? [y/N] ";
 
     print!("{prompt}");
     std::io::stdout().flush().unwrap();

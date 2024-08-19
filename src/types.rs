@@ -29,8 +29,11 @@ pub(crate) struct Binaries {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub(crate) struct BinaryVersion {
+    /// The name of the Sui tool binary
     pub binary_name: String,
-    pub network: Network,
+    /// The network release of the binary
+    pub network_release: Network,
+    /// The version of the binary in the corresponding release
     pub version: String,
 }
 
@@ -39,10 +42,10 @@ impl Display for Binaries {
         let mut s: HashMap<Network, Vec<(String, String)>> = HashMap::new();
 
         for b in self.binaries.clone() {
-            if let Some(binaries) = s.get_mut(&b.network) {
+            if let Some(binaries) = s.get_mut(&b.network_release) {
                 binaries.push((b.binary_name, b.version));
             } else {
-                s.insert(b.network, vec![(b.binary_name, b.version)]);
+                s.insert(b.network_release, vec![(b.binary_name, b.version)]);
             }
         }
 
@@ -88,7 +91,7 @@ impl BinaryVersion {
         let binary_name = filename.replace(&format!("-{}", version), "");
         Ok(BinaryVersion {
             binary_name,
-            network: Network::from_str(network)?,
+            network_release: Network::from_str(network)?,
             version,
         })
     }
@@ -111,7 +114,7 @@ impl From<HashMap<String, (Network, Version)>> for Binaries {
             .iter()
             .map(|(k, v)| BinaryVersion {
                 binary_name: k.to_string(),
-                network: v.0,
+                network_release: v.0,
                 version: v.1.to_string(),
             })
             .collect();

@@ -4,7 +4,7 @@ use crate::types::Network;
 
 #[derive(Parser)]
 #[command(name = "suiup")]
-#[command(about = "Sui CLI version manager.")]
+#[command(about = "Sui Tooling Version Manager.")]
 pub(crate) struct Suiup {
     #[command(subcommand)]
     pub command: Commands,
@@ -34,7 +34,7 @@ pub(crate) enum ComponentCommands {
     Add {
         name: Vec<String>,
         #[arg(long, value_enum, default_value_t = Network::Testnet)]
-        network: Network,
+        network_release: Network,
         #[arg(
             long,
             help = "Version of the component to install. If not provided, the latest version will be installed."
@@ -61,7 +61,7 @@ pub(crate) enum DefaultCommands {
         /// version is provided, the latest version available locally will be set.
         name: Vec<String>,
         #[arg(short, long, value_enum, default_value_t = Network::Testnet)]
-        network: Network,
+        network_release: Network,
         #[arg(short, long, help = "Version of the component to set to default.")]
         /// Version of the component to set to default.
         version: String,
