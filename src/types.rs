@@ -3,6 +3,7 @@ use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
     path::PathBuf,
+    str::FromStr,
 };
 
 use clap::ValueEnum;
@@ -79,6 +80,19 @@ pub(crate) enum Network {
     Devnet,
     #[serde(alias = "mainnet")]
     Mainnet,
+}
+
+impl FromStr for Network {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "testnet" => Ok(Network::Testnet),
+            "devnet" => Ok(Network::Devnet),
+            "mainnet" => Ok(Network::Mainnet),
+            _ => Err(anyhow!("Invalid network")),
+        }
+    }
 }
 
 impl Display for Network {

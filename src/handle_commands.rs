@@ -3,6 +3,7 @@ use anyhow::bail;
 use anyhow::Error;
 use flate2::read::GzDecoder;
 use reqwest::Client;
+use std::cmp::max_by;
 use std::collections::HashMap;
 use std::fs::set_permissions;
 use std::fs::File;
@@ -10,6 +11,7 @@ use std::io::BufReader;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
+use std::str::FromStr;
 use tar::Archive;
 use trauma::download::Download;
 use trauma::downloader::DownloaderBuilder;
@@ -234,9 +236,48 @@ pub fn handle_show() -> Result<(), Error> {
 }
 
 /// Handles the `update` command
-pub fn handle_update() {
-    println!("Updating components...");
-    // Implement the update logic here
+pub async fn handle_update(name: String) -> Result<(), Error> {
+    let binaries_by_network = installed_binaries_grouped_by_network()?;
+    // map of network and last version known locally
+    let network_local_last_version = binaries_by_network
+        .iter()
+        .map(|(network, binaries)| {
+            let last_version = binaries
+                .iter()
+                .filter(|x| x.binary_name == name)
+                .max_by(|a, b| a.version.cmp(&b.version))
+                .unwrap();
+            (network, last_version.version.clone())
+        })
+        .collect::<HashMap<_, _>>();
+
+    // find the last local version of the name binary, for each network
+    // then find the last release for each network and compare the versions
+
+    let releases = release_list().await?;
+    let mut to_update = vec![];
+    for (n, v) in &network_local_last_version {
+        let last_release = last_release_for_network(&releases, &n).await?;
+        let last_version = last_release.1;
+        if v == &last_version {
+            println!("[{n} release] {name} is up to date");
+        } else {
+            println!("[{n} release] {name} is outdated. Local: {v}, Latest: {last_version}");
+            to_update.push((n, last_version));
+        }
+    }
+
+    for (n, v) in to_update.iter() {
+        println!("Updating {name} to {v} from {n} release");
+        handle_component(ComponentCommands::Add {
+            name: vec![name.clone()],
+            network_release: Network::from_str(n)?,
+            version: Some(v.clone()),
+        })
+        .await?;
+    }
+
+    Ok(())
 }
 
 /// Handles the `override` command
@@ -254,7 +295,7 @@ pub fn handle_which() -> Result<(), Error> {
 }
 
 /// Fetches the list of releases from the GitHub repository
-async fn release_list() -> Result<Vec<Release>, anyhow::Error> {
+pub(crate) async fn release_list() -> Result<Vec<Release>, anyhow::Error> {
     let client = Client::new();
     let release_url = format!("https://api.github.com/repos/{}/releases", GITHUB_REPO);
     let releases: Vec<Release> = client
@@ -581,7 +622,7 @@ fn default_file_path() -> Result<PathBuf, Error> {
         let mut file = File::create(&path)?;
         let default = HashMap::<String, (String, String)>::new();
         let default_str = serde_json::to_string(&default)?;
-        file.write_all(serde_json::to_string(&default_str)?.as_bytes())?;
+        file.write_all(default_str.as_bytes())?;
     }
     Ok(path)
 }
@@ -622,4 +663,21 @@ pub(crate) fn initialize() -> Result<(), Error> {
     installed_binaries_file()?;
 
     Ok(())
+}
+
+pub(crate) async fn last_release_for_network<'a>(
+    releases: &'a [Release],
+    network: &'a str,
+) -> Result<(&'a str, String), Error> {
+    if let Some(release) = releases
+        .iter()
+        .find(|r| r.assets.iter().any(|a| a.name.contains(network)))
+    {
+        Ok((
+            network,
+            extract_version_from_release(release.assets[0].name.as_str())?,
+        ))
+    } else {
+        bail!("No release found for {network}")
+    }
 }

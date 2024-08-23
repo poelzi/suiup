@@ -19,7 +19,7 @@ pub(crate) enum Commands {
     #[command(about = "Show installed and active Sui binaries")]
     Show,
     #[command(about = "Update binary")]
-    Update,
+    Update { name: String },
     #[command(about = "Override project’s CLI version")]
     Override,
     #[command(about = "Show the path of the active CLI binary")]

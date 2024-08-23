@@ -29,7 +29,7 @@ async fn main() -> Result<(), Error> {
         Commands::Component(cmd) => handle_component(cmd).await.map_err(|e| anyhow!("{e}"))?,
         Commands::Default(cmd) => handle_default(cmd)?,
         Commands::Show => handle_show()?,
-        Commands::Update => handle_update(),
+        Commands::Update { name } => handle_update(name).await?,
         Commands::Override => handle_override(),
         Commands::Which => handle_which()?,
     }
