@@ -2,12 +2,13 @@ use anyhow::{anyhow, Error};
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
+    path::PathBuf,
 };
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
-use crate::handle_commands::extract_version_from_release;
+use crate::handle_commands::{extract_version_from_release, installed_binaries_file};
 
 pub type Version = String;
 
@@ -35,6 +36,8 @@ pub(crate) struct BinaryVersion {
     pub network_release: Network,
     /// The version of the binary in the corresponding release
     pub version: String,
+    /// Path to the binary
+    pub path: Option<String>,
 }
 
 impl Display for Binaries {
@@ -93,7 +96,54 @@ impl BinaryVersion {
             binary_name,
             network_release: Network::from_str(network)?,
             version,
+            path: None,
         })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+/// Struct to store the installed binaries
+pub struct InstalledBinaries {
+    binaries: Vec<BinaryVersion>,
+}
+
+impl InstalledBinaries {
+    pub(crate) fn create_file(path: &PathBuf) -> Result<(), Error> {
+        let binaries = InstalledBinaries { binaries: vec![] };
+        let s = serde_json::to_string(&binaries)
+            .map_err(|_| anyhow!("Cannot serialize the installed binaries to file"))?;
+        std::fs::write(path, s).map_err(|_| anyhow!("Cannot write the installed binaries file"))?;
+        Ok(())
+    }
+
+    pub(crate) fn new() -> Result<Self, Error> {
+        Self::read_from_file()
+    }
+    pub(crate) fn save_to_file(&self) -> Result<(), Error> {
+        let s = serde_json::to_string(self)
+            .map_err(|_| anyhow!("Cannot read the installed binaries file"))?;
+        std::fs::write(installed_binaries_file()?, s)
+            .map_err(|_| anyhow!("Cannot serialize the installed binaries to file"))?;
+        Ok(())
+    }
+    pub(crate) fn read_from_file() -> Result<Self, Error> {
+        let s = std::fs::read_to_string(installed_binaries_file()?)
+            .map_err(|_| anyhow!("Cannot read from the installed binaries file"))?;
+        let binaries: InstalledBinaries = serde_json::from_str(&s)
+            .map_err(|_| anyhow!("Cannot deserialize from installed binaries file"))?;
+        Ok(binaries)
+    }
+
+    pub(crate) fn add_binary(&mut self, binary: BinaryVersion) {
+        self.binaries.push(binary);
+    }
+
+    pub(crate) fn remove_binary(&mut self, binary: &str) {
+        self.binaries.retain(|b| b.binary_name != binary);
+    }
+
+    pub(crate) fn binaries(&self) -> &[BinaryVersion] {
+        &self.binaries
     }
 }
 
@@ -116,6 +166,7 @@ impl From<HashMap<String, (Network, Version)>> for Binaries {
                 binary_name: k.to_string(),
                 network_release: v.0,
                 version: v.1.to_string(),
+                path: None,
             })
             .collect();
         Binaries { binaries }

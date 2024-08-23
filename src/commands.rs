@@ -42,9 +42,9 @@ pub(crate) enum ComponentCommands {
         version: Option<String>,
     },
     #[command(
-        about = "Remove one or more components. By default, the binary from each release will be removed. Use --network and --version to remove a specific version from a specific release."
+        about = "Remove one or more components. By default, the binary from each release will be removed."
     )]
-    Remove { name: Vec<String> },
+    Remove { binaries: Vec<String> },
 }
 
 #[derive(Subcommand)]

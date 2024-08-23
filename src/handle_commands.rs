@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use anyhow::bail;
 use anyhow::Error;
 use flate2::read::GzDecoder;
 use reqwest::Client;
@@ -17,6 +18,7 @@ use crate::commands::ComponentCommands;
 use crate::commands::DefaultCommands;
 use crate::types::Binaries;
 use crate::types::BinaryVersion;
+use crate::types::InstalledBinaries;
 use crate::types::Network;
 use crate::types::Release;
 use crate::types::Version;
@@ -24,6 +26,7 @@ use crate::BINARIES_FOLDER;
 use crate::DEFAULT_BIN_FOLDER;
 use crate::DEFAULT_VERSION_FILENAME;
 use crate::GITHUB_REPO;
+use crate::INSTALLED_BINARIES_FILENAME;
 use crate::RELEASES_ARCHIVES_FOLDER;
 use crate::SUIUP_FOLDER;
 
@@ -66,62 +69,73 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                     .map_err(|_| anyhow!("Could not download latest release"))?
             };
             let version = extract_version_from_release(&filename)?;
+            let mut installed_binaries = InstalledBinaries::new()?;
             for binary in &name {
                 if !check_if_binaries_exist(binary, &network, &version)? {
                     println!("Adding component: {binary}-{version}");
                     extract_component(binary, network, &filename)
                         .map_err(|_| anyhow!("Could not extract component"))?;
+                    let filename = format!("{}-{}", binary, version);
+                    #[cfg(target_os = "windows")]
+                    {
+                        let filename = format!("{}.exe", filename);
+                    }
+                    let binary_path = binaries_folder()?.join(network.to_string()).join(filename);
+                    installed_binaries.add_binary(BinaryVersion {
+                        binary_name: binary.to_string(),
+                        network_release: network,
+                        version: version.clone(),
+                        path: Some(binary_path.to_string_lossy().to_string()),
+                    });
                 } else {
                     println!("Component {binary}-{version} already installed");
                 }
             }
+            installed_binaries.save_to_file()?;
             update_after_install(&name, network, &version)?;
         }
-        ComponentCommands::Remove { name } => {
+        ComponentCommands::Remove { binaries } => {
             // remove from default file
             // remove from default_bin
             // remove from binaries
             // REFACTOR THIS SHITTY CODE HAHAH!
-            for n in name {
-                println!("Removing component: {}", n);
-                let installed_binaries = installed_binaries_grouped_by_network()?;
-                for (network, binaries) in installed_binaries {
-                    println!("[{network} release]");
-                    for binary in binaries {
-                        if binary.binary_name == n {
-                            // remove from binaries folder
-                            let mut path = binaries_folder()?;
-                            let binary_name = format!("{}-{}", binary.binary_name, binary.version);
-                            path.push(&network);
-                            path.push(&binary_name);
-                            #[cfg(target_os = "windows")]
-                            {
-                                let binary_name = format!("{}.exe", binary_name);
-                            }
-                            println!("{:?}", path.display());
-                            std::fs::remove_file(path)?;
 
-                            // remove from default-bin folder
-                            let mut path = default_bin_folder()?;
-                            path.push(&binary.binary_name);
-                            println!("{:?}", path.display());
-                            if path.exists() {
-                                std::fs::remove_file(path)?;
-                            }
+            let mut installed_binaries = InstalledBinaries::new()?;
 
-                            // update default version file
-                            let default = std::fs::read_to_string(default_file_path()?)?;
-                            let mut default: HashMap<String, (Network, Version)> =
-                                serde_json::from_str(&default)?;
-                            if default.contains_key(&binary.binary_name) {
-                                default.remove(&binary.binary_name);
-                                let mut file = File::create(default_file_path()?)?;
-                                file.write_all(serde_json::to_string(&default)?.as_bytes())?;
-                            }
-                        }
+            let binaries_to_remove = installed_binaries
+                .binaries()
+                .iter()
+                .filter(|b| binaries.contains(&b.binary_name))
+                .collect::<Vec<_>>();
+
+            for p in &binaries_to_remove {
+                if let Some(p) = p.path.as_ref() {
+                    if !PathBuf::from(p).exists() {
+                        bail!("Binary {p} does not exist");
                     }
                 }
             }
+
+            let default_file = default_file_path()?;
+            let default_binaries = std::fs::read_to_string(&default_file)?;
+            let mut default_binaries: HashMap<String, (Network, Version)> =
+                serde_json::from_str(&default_binaries)?;
+
+            for binary in binaries_to_remove {
+                if let Some(p) = binary.path.as_ref() {
+                    std::fs::remove_file(p)?;
+                    std::fs::remove_file(default_bin_folder()?.join(&binary.binary_name))?;
+                    default_binaries.remove(&binary.binary_name);
+                }
+            }
+            File::create(&default_file)?
+                .write_all(serde_json::to_string(&default_binaries)?.as_bytes())?;
+
+            // remove from installed_binaries
+            for binary in &binaries {
+                installed_binaries.remove_binary(binary)
+            }
+            installed_binaries.save_to_file()?;
         }
     }
     Ok(())
@@ -151,6 +165,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                         binary_name: binary.to_string(),
                         network_release: network,
                         version: version.to_string(),
+                        path: None,
                     };
                     if !binaries.contains(&b) {
                         println!(
@@ -560,8 +575,7 @@ fn default_file_path() -> Result<PathBuf, Error> {
         let mut file = File::create(&path)?;
         let default = HashMap::<String, (String, String)>::new();
         let default_str = serde_json::to_string(&default)?;
-        println!("Creating default version file: {}", default_str);
-        file.write_all(serde_json::to_string(&default)?.as_bytes())?;
+        file.write_all(serde_json::to_string(&default_str)?.as_bytes())?;
     }
     Ok(path)
 }
@@ -619,4 +633,25 @@ fn installed_binaries_grouped_by_network() -> Result<HashMap<String, Vec<BinaryV
     }
 
     Ok(files_by_folder)
+}
+
+pub(crate) fn installed_binaries_file() -> Result<PathBuf, Error> {
+    let mut path = config_folder_or_create()?;
+    path.push(INSTALLED_BINARIES_FILENAME);
+    if !path.exists() {
+        InstalledBinaries::create_file(&path)?;
+    }
+
+    Ok(path)
+}
+
+pub(crate) fn initialize() -> Result<(), Error> {
+    config_folder_or_create()?;
+    binaries_folder()?;
+    release_archive_folder()?;
+    default_bin_folder()?;
+    default_file_path()?;
+    installed_binaries_file()?;
+
+    Ok(())
 }

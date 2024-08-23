@@ -1,4 +1,5 @@
 use clap::Parser;
+use handle_commands::initialize;
 use handle_commands::{
     handle_component, handle_default, handle_override, handle_show, handle_update, handle_which,
 };
@@ -17,9 +18,11 @@ const SUIUP_FOLDER: &str = ".suiup";
 const BINARIES_FOLDER: &str = "binaries";
 const DEFAULT_BIN_FOLDER: &str = "default-bin";
 const DEFAULT_VERSION_FILENAME: &str = "default_version.json";
+const INSTALLED_BINARIES_FILENAME: &str = "installed_binaries.json";
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    initialize()?;
     let args = Suiup::parse();
 
     match args.command {
