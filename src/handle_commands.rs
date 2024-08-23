@@ -161,6 +161,11 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             let binaries = installed_binaries
                 .get(&network.to_string())
                 .ok_or_else(|| anyhow!("No binaries installed for {network}"))?;
+            for (_, bins) in &installed_binaries {
+                if !bins.iter().any(|x| x.binary_name == name) {
+                    bail!("Binary {name} not found in installed binaries. Use `suiup show` to see installed binaries.")
+                }
+            }
 
             let version = version.unwrap_or_else(|| {
                 binaries
