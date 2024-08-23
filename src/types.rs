@@ -8,7 +8,7 @@ use std::{
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
-use crate::handle_commands::{extract_version_from_release, installed_binaries_file};
+use crate::handle_commands::installed_binaries_file;
 
 pub type Version = String;
 
@@ -73,8 +73,11 @@ impl Display for BinaryVersion {
 )]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Network {
+    #[serde(alias = "testnet")]
     Testnet,
+    #[serde(alias = "devnet")]
     Devnet,
+    #[serde(alias = "mainnet")]
     Mainnet,
 }
 
@@ -85,19 +88,6 @@ impl Display for Network {
             Network::Devnet => write!(f, "devnet"),
             Network::Mainnet => write!(f, "mainnet"),
         }
-    }
-}
-
-impl BinaryVersion {
-    pub fn from_filename_network(filename: &str, network: &str) -> Result<Self, Error> {
-        let version = extract_version_from_release(filename)?;
-        let binary_name = filename.replace(&format!("-{}", version), "");
-        Ok(BinaryVersion {
-            binary_name,
-            network_release: Network::from_str(network)?,
-            version,
-            path: None,
-        })
     }
 }
 
@@ -144,17 +134,6 @@ impl InstalledBinaries {
 
     pub(crate) fn binaries(&self) -> &[BinaryVersion] {
         &self.binaries
-    }
-}
-
-impl Network {
-    fn from_str(input: &str) -> Result<Network, Error> {
-        match input.to_lowercase().as_str() {
-            "devnet" => Ok(Network::Devnet),
-            "mainnet" => Ok(Network::Mainnet),
-            "testnet" => Ok(Network::Testnet),
-            _ => Err(anyhow!("Invalid network")),
-        }
     }
 }
 

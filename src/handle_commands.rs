@@ -5,7 +5,7 @@ use flate2::read::GzDecoder;
 use reqwest::Client;
 use std::collections::HashMap;
 use std::fs::set_permissions;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::BufReader;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
@@ -158,47 +158,48 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
         } => {
             // a map of network --> to BinaryVersion
             let installed_binaries = installed_binaries_grouped_by_network()?;
-            let binaries = installed_binaries.get(&network.to_string());
-            if let Some(binaries) = binaries {
-                for binary in &name {
-                    let b = BinaryVersion {
-                        binary_name: binary.to_string(),
-                        network_release: network,
-                        version: version.to_string(),
-                        path: None,
-                    };
-                    if !binaries.contains(&b) {
-                        println!(
-                            "Component {binary}-{version} from {network} release is not installed. Use suiup show to see installed components or suiup component add {binary} --network {network} --version {version} to install it."
-                        );
-                        return Ok(());
-                    }
-                }
-            } else {
-                println!("No components installed from {network} release");
-                return Ok(());
-            }
+            let binaries = installed_binaries
+                .get(&network.to_string())
+                .ok_or_else(|| anyhow!("No binaries installed for {network}"))?;
+
+            let version = version.unwrap_or_else(|| {
+                binaries
+                    .iter()
+                    .max_by(|a, b| a.version.cmp(&b.version))
+                    .unwrap()
+                    .version
+                    .clone()
+            });
+
+            // check if the binary for this network and version exists
+            let binary_version = format!("{}-{}", name, version);
+            binaries
+                .iter()
+                .find(|b| {
+                    b.binary_name == name && b.version == version && b.network_release == network
+                })
+                .ok_or_else(|| {
+                    anyhow!("Binary {binary_version} from {network} release not found. Use `suiup show` to see installed binaries.")
+                })?;
+
             // copy files to default-bin
-            for n in &name {
-                let mut dst = default_bin_folder()?;
-                #[cfg(target_os = "windows")]
-                {
-                    let n = format!("{}.exe", n);
-                }
-                dst.push(n);
-
-                let mut src = binaries_folder()?;
-                src.push(network.to_string());
-                let binary_version = format!("{}-{}", n, version);
-                #[cfg(target_os = "windows")]
-                {
-                    let binary_version = format!("{}.exe", binary_version);
-                }
-                src.push(binary_version);
-
-                std::fs::copy(src, dst)?;
+            let mut dst = default_bin_folder()?;
+            #[cfg(target_os = "windows")]
+            {
+                let name = format!("{}.exe", name);
             }
-            update_default_version_file(&name, network, &version)?
+            dst.push(&name);
+
+            let mut src = binaries_folder()?;
+            src.push(network.to_string());
+            #[cfg(target_os = "windows")]
+            {
+                let binary_version = format!("{}.exe", binary_version);
+            }
+            src.push(binary_version);
+
+            std::fs::copy(src, dst)?;
+            update_default_version_file(&vec![name], network, &version)?
         }
     }
 
@@ -582,53 +583,15 @@ fn default_file_path() -> Result<PathBuf, Error> {
 
 /// Returns a map of installed binaries grouped by network releases
 fn installed_binaries_grouped_by_network() -> Result<HashMap<String, Vec<BinaryVersion>>, Error> {
+    let installed_binaries = InstalledBinaries::new()?;
+    let binaries = installed_binaries.binaries();
     let mut files_by_folder: HashMap<String, Vec<BinaryVersion>> = HashMap::new();
-    let mut folders = Vec::new();
 
-    // Read the directory contents
-    for entry in fs::read_dir(binaries_folder()?)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        // Check if the path is a directory
-        if path.is_dir() {
-            folders.push(path);
-        }
-    }
-
-    for network_folder in &folders {
-        let paths = fs::read_dir(network_folder)?
-            .filter_map(Result::ok) // Filter out errors, if any
-            .filter(|entry| entry.path().is_file())
-            .collect::<Vec<_>>();
-
-        for p in paths {
-            if let Some(filename) = p.path().file_name() {
-                if let Some(f) = files_by_folder.get_mut(
-                    &network_folder
-                        .file_name()
-                        .unwrap()
-                        .to_string_lossy()
-                        .to_string(),
-                ) {
-                    f.push(BinaryVersion::from_filename_network(
-                        filename.to_str().unwrap(),
-                        network_folder.file_name().unwrap().to_str().unwrap(),
-                    )?);
-                } else {
-                    files_by_folder.insert(
-                        network_folder
-                            .file_name()
-                            .unwrap()
-                            .to_string_lossy()
-                            .to_string(),
-                        vec![BinaryVersion::from_filename_network(
-                            filename.to_str().unwrap(),
-                            network_folder.file_name().unwrap().to_str().unwrap(),
-                        )?],
-                    );
-                }
-            }
+    for b in binaries {
+        if let Some(f) = files_by_folder.get_mut(&b.network_release.to_string()) {
+            f.push(b.clone());
+        } else {
+            files_by_folder.insert(b.network_release.to_string(), vec![b.clone()]);
         }
     }
 

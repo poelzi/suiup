@@ -57,13 +57,18 @@ pub(crate) enum DefaultCommands {
         // long,
         // help = "Component(s) to be set as default. Must be provided, together with the network. If no version is provided, the latest version available locally will be set."
         // )]
-        /// Component(s) to be set as default. Must be provided, together with the network. If no
+        /// Component to be set as default. If no network is provided, testnet will be selected. If no
         /// version is provided, the latest version available locally will be set.
-        name: Vec<String>,
+        name: String,
         #[arg(short, long, value_enum, default_value_t = Network::Testnet)]
         network_release: Network,
-        #[arg(short, long, help = "Version of the component to set to default.")]
+        #[arg(
+            short,
+            long,
+            help = "Version of the component to set to default.",
+            requires = "network_release"
+        )]
         /// Version of the component to set to default.
-        version: String,
+        version: Option<String>,
     },
 }
