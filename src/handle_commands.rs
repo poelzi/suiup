@@ -159,7 +159,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             version,
         } => {
             // a map of network --> to BinaryVersion
-            let installed_binaries = installed_binaries_grouped_by_network()?;
+            let installed_binaries = installed_binaries_grouped_by_network(None)?;
             let binaries = installed_binaries
                 .get(&network.to_string())
                 .ok_or_else(|| anyhow!("No binaries installed for {network}"))?;
@@ -221,7 +221,7 @@ pub fn handle_show() -> Result<(), Error> {
 
     println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");
 
-    let installed_binaries = installed_binaries_grouped_by_network()?;
+    let installed_binaries = installed_binaries_grouped_by_network(None)?;
 
     println!("\x1b[1mInstalled binaries:\x1b[0m");
 
@@ -237,7 +237,13 @@ pub fn handle_show() -> Result<(), Error> {
 
 /// Handles the `update` command
 pub async fn handle_update(name: String) -> Result<(), Error> {
-    let binaries_by_network = installed_binaries_grouped_by_network()?;
+    let installed_binaries = InstalledBinaries::new()?;
+    let binaries = installed_binaries.binaries();
+    if !binaries.iter().any(|x| x.binary_name == name) {
+        bail!("Binary {name} not found in installed binaries. Use `suiup show` to see installed binaries.")
+    }
+    let binaries_by_network = installed_binaries_grouped_by_network(Some(installed_binaries))?;
+
     // map of network and last version known locally
     let network_local_last_version = binaries_by_network
         .iter()
@@ -628,8 +634,14 @@ fn default_file_path() -> Result<PathBuf, Error> {
 }
 
 /// Returns a map of installed binaries grouped by network releases
-fn installed_binaries_grouped_by_network() -> Result<HashMap<String, Vec<BinaryVersion>>, Error> {
-    let installed_binaries = InstalledBinaries::new()?;
+fn installed_binaries_grouped_by_network(
+    installed_binaries: Option<InstalledBinaries>,
+) -> Result<HashMap<String, Vec<BinaryVersion>>, Error> {
+    let installed_binaries = if let Some(installed_binaries) = installed_binaries {
+        installed_binaries
+    } else {
+        InstalledBinaries::new()?
+    };
     let binaries = installed_binaries.binaries();
     let mut files_by_folder: HashMap<String, Vec<BinaryVersion>> = HashMap::new();
 
