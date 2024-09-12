@@ -114,7 +114,7 @@ pub struct InstalledBinaries {
 impl InstalledBinaries {
     pub(crate) fn create_file(path: &PathBuf) -> Result<(), Error> {
         let binaries = InstalledBinaries { binaries: vec![] };
-        let s = serde_json::to_string(&binaries)
+        let s = serde_json::to_string_pretty(&binaries)
             .map_err(|_| anyhow!("Cannot serialize the installed binaries to file"))?;
         std::fs::write(path, s).map_err(|_| anyhow!("Cannot write the installed binaries file"))?;
         Ok(())
@@ -124,7 +124,7 @@ impl InstalledBinaries {
         Self::read_from_file()
     }
     pub(crate) fn save_to_file(&self) -> Result<(), Error> {
-        let s = serde_json::to_string(self)
+        let s = serde_json::to_string_pretty(self)
             .map_err(|_| anyhow!("Cannot read the installed binaries file"))?;
         std::fs::write(installed_binaries_file()?, s)
             .map_err(|_| anyhow!("Cannot serialize the installed binaries to file"))?;

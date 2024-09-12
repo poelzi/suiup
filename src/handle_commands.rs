@@ -3,8 +3,8 @@ use anyhow::bail;
 use anyhow::Error;
 use flate2::read::GzDecoder;
 use reqwest::Client;
-use std::cmp::max_by;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs::set_permissions;
 use std::fs::File;
 use std::io::BufReader;
@@ -113,27 +113,49 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             for p in &binaries_to_remove {
                 if let Some(p) = p.path.as_ref() {
                     if !PathBuf::from(p).exists() {
-                        bail!("Binary {p} does not exist");
+                        bail!("Binary {p} does not exist. Aborting the command.");
                     }
                 }
             }
+            println!("Removing binaries...");
 
-            let default_file = default_file_path()?;
-            let default_binaries = std::fs::read_to_string(&default_file)?;
+            let default_file =
+                default_file_path().map_err(|e| anyhow!("Cannot find default file: {e}"))?;
+            let default_binaries = std::fs::read_to_string(&default_file)
+                .map_err(|_| anyhow!("Cannot read file {}", default_file.display()))?;
             let mut default_binaries: HashMap<String, (Network, Version)> =
-                serde_json::from_str(&default_binaries)?;
+                serde_json::from_str(&default_binaries)
+                    .map_err(|_| anyhow!("Cannot decode default binary file to JSON"))?;
 
-            for binary in binaries_to_remove {
+            // Remove the installed binaries folder
+            for binary in &binaries_to_remove {
                 if let Some(p) = binary.path.as_ref() {
-                    std::fs::remove_file(p)?;
-                    std::fs::remove_file(default_bin_folder()?.join(&binary.binary_name))?;
-                    default_binaries.remove(&binary.binary_name);
+                    std::fs::remove_file(p).map_err(|e| anyhow!("Cannot remove file: {e}"))?;
                 }
             }
-            File::create(&default_file)?
-                .write_all(serde_json::to_string(&default_binaries)?.as_bytes())?;
 
-            // remove from installed_binaries
+            // Remove the binaries from the default-bin folder
+            let default_binaries_to_remove = binaries_to_remove
+                .iter()
+                .map(|x| &x.binary_name)
+                .collect::<HashSet<_>>();
+            for binary in default_binaries_to_remove {
+                let default_bin_path = default_bin_folder()
+                    .map_err(|e| anyhow!("Cannot find the default-bin folder: {e}"))?
+                    .join(&binary);
+                if default_bin_path.exists() {
+                    std::fs::remove_file(default_bin_path)
+                        .map_err(|e| anyhow!("Cannot remove file: {e}"))?;
+                }
+
+                default_binaries.remove(binary);
+            }
+
+            // Remove from default binaries metadata file
+            File::create(&default_file)?
+                .write_all(serde_json::to_string_pretty(&default_binaries)?.as_bytes())?;
+
+            // Remove from installed_binaries metadata file
             for binary in &binaries {
                 installed_binaries.remove_binary(binary)
             }
@@ -244,18 +266,27 @@ pub async fn handle_update(name: String) -> Result<(), Error> {
     }
     let binaries_by_network = installed_binaries_grouped_by_network(Some(installed_binaries))?;
 
-    // map of network and last version known locally
-    let network_local_last_version = binaries_by_network
-        .iter()
-        .map(|(network, binaries)| {
-            let last_version = binaries
+    let mut network_local_last_version: Vec<(String, String)> = vec![];
+
+    for (network, binaries) in &binaries_by_network {
+        let last_version = binaries
+            .iter()
+            .filter(|x| x.binary_name == name)
+            .collect::<Vec<_>>();
+        if last_version.is_empty() {
+            continue;
+        }
+        let last_version = if last_version.len() > 1 {
+            last_version
                 .iter()
-                .filter(|x| x.binary_name == name)
                 .max_by(|a, b| a.version.cmp(&b.version))
-                .unwrap();
-            (network, last_version.version.clone())
-        })
-        .collect::<HashMap<_, _>>();
+                .unwrap()
+        } else {
+            last_version.first().unwrap()
+        };
+        network_local_last_version.push((network.clone(), last_version.version.clone()));
+    }
+    // map of network and last version known locally
 
     // find the last local version of the name binary, for each network
     // then find the last release for each network and compare the versions
@@ -602,7 +633,7 @@ fn update_default_version_file(
     }
 
     let mut file = File::create(path)?;
-    file.write_all(serde_json::to_string(&map)?.as_bytes())?;
+    file.write_all(serde_json::to_string_pretty(&map)?.as_bytes())?;
 
     Ok(())
 }
@@ -627,7 +658,7 @@ fn default_file_path() -> Result<PathBuf, Error> {
     if !path.exists() {
         let mut file = File::create(&path)?;
         let default = HashMap::<String, (String, String)>::new();
-        let default_str = serde_json::to_string(&default)?;
+        let default_str = serde_json::to_string_pretty(&default)?;
         file.write_all(default_str.as_bytes())?;
     }
     Ok(path)

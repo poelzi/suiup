@@ -16,6 +16,17 @@ pub(crate) enum Commands {
     Component(ComponentCommands),
     #[command(subcommand, about = "Get or set the default Sui components' version")]
     Default(DefaultCommands),
+    #[command(about = "Install one or more components. Shortcut of `suiup component add`")]
+    Install {
+        name: Vec<String>,
+        #[arg(long, value_enum, default_value_t = Network::Testnet)]
+        network_release: Network,
+        #[arg(
+            long,
+            help = "Version of the component to install. If not provided, the latest version will be installed."
+        )]
+        version: Option<String>,
+    },
     #[command(about = "Show installed and active Sui binaries")]
     Show,
     #[command(about = "Update binary")]

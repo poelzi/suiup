@@ -10,7 +10,7 @@ use anyhow::Error;
 mod commands;
 mod handle_commands;
 mod types;
-use commands::{Commands, Suiup};
+use commands::{Commands, ComponentCommands, Suiup};
 
 const GITHUB_REPO: &str = "mystenlabs/sui";
 const RELEASES_ARCHIVES_FOLDER: &str = "releases";
@@ -28,6 +28,18 @@ async fn main() -> Result<(), Error> {
     match args.command {
         Commands::Component(cmd) => handle_component(cmd).await.map_err(|e| anyhow!("{e}"))?,
         Commands::Default(cmd) => handle_default(cmd)?,
+        Commands::Install {
+            name,
+            network_release,
+            version,
+        } => {
+            handle_component(ComponentCommands::Add {
+                name,
+                network_release,
+                version,
+            })
+            .await?
+        }
         Commands::Show => handle_show()?,
         Commands::Update { name } => handle_update(name).await?,
         Commands::Override => handle_override(),
