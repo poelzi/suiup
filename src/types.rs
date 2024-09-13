@@ -37,26 +37,33 @@ pub(crate) struct BinaryVersion {
     pub network_release: Network,
     /// The version of the binary in the corresponding release
     pub version: String,
+    /// Debug build of the binary
+    pub debug: bool,
     /// Path to the binary
     pub path: Option<String>,
 }
 
 impl Display for Binaries {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let mut s: HashMap<Network, Vec<(String, String)>> = HashMap::new();
+        let mut s: HashMap<Network, Vec<(String, String, bool)>> = HashMap::new();
 
+        println!("self: {:?}", self.binaries);
         for b in self.binaries.clone() {
             if let Some(binaries) = s.get_mut(&b.network_release) {
-                binaries.push((b.binary_name, b.version));
+                binaries.push((b.binary_name, b.version, b.debug));
             } else {
-                s.insert(b.network_release, vec![(b.binary_name, b.version)]);
+                s.insert(b.network_release, vec![(b.binary_name, b.version, b.debug)]);
             }
         }
 
         for (network, binaries) in s {
             writeln!(f, "[{network} release]")?;
-            for (binary, version) in binaries {
-                writeln!(f, "    {binary}-{version}")?;
+            for (binary, version, debug) in binaries {
+                if binary == "sui" && debug {
+                    writeln!(f, "    {binary}-{version} (debug build)")?;
+                } else {
+                    writeln!(f, "    {binary}-{version}")?;
+                }
             }
         }
         Ok(())
@@ -65,7 +72,11 @@ impl Display for Binaries {
 
 impl Display for BinaryVersion {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}-{}", self.binary_name, self.version)
+        if self.debug {
+            write!(f, "{}-{} (debug build)", self.binary_name, self.version)
+        } else {
+            write!(f, "{}-{}", self.binary_name, self.version)
+        }
     }
 }
 
@@ -151,14 +162,15 @@ impl InstalledBinaries {
     }
 }
 
-impl From<HashMap<String, (Network, Version)>> for Binaries {
-    fn from(map: HashMap<String, (Network, Version)>) -> Self {
+impl From<HashMap<String, (Network, Version, bool)>> for Binaries {
+    fn from(map: HashMap<String, (Network, Version, bool)>) -> Self {
         let binaries = map
             .iter()
             .map(|(k, v)| BinaryVersion {
                 binary_name: k.to_string(),
                 network_release: v.0,
                 version: v.1.to_string(),
+                debug: v.2,
                 path: None,
             })
             .collect();

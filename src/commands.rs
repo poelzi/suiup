@@ -51,6 +51,11 @@ pub(crate) enum ComponentCommands {
             help = "Version of the component to install. If not provided, the latest version will be installed."
         )]
         version: Option<String>,
+        #[arg(
+            long,
+            help = "Whether to install the debug version of the component (only available for sui). Default is false."
+        )]
+        debug: bool,
     },
     #[command(
         about = "Remove one or more components. By default, the binary from each release will be removed."
@@ -81,5 +86,11 @@ pub(crate) enum DefaultCommands {
         )]
         /// Version of the component to set to default.
         version: Option<String>,
+        #[arg(
+            short,
+            long,
+            help = "Whether to set the debug version of the component as default (only available for sui)."
+        )]
+        debug: bool,
     },
 }

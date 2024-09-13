@@ -37,6 +37,7 @@ async fn main() -> Result<(), Error> {
                 name,
                 network_release,
                 version,
+                debug: false,
             })
             .await?
         }

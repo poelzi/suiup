@@ -49,7 +49,9 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             name,
             network_release: network,
             version,
+            debug,
         } => {
+            println!("Debug build: {debug}");
             if name.is_empty() {
                 print!("No components provided. Use `suiup component list` to see available components.");
                 return Ok(());
@@ -73,9 +75,14 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             let version = extract_version_from_release(&filename)?;
             let mut installed_binaries = InstalledBinaries::new()?;
             for binary in &name {
-                if !check_if_binaries_exist(binary, &network, &version)? {
+                let binary_for_debug = if debug == true && binary == "sui" {
+                    format!("{}-debug", binary)
+                } else {
+                    binary.to_string()
+                };
+                if !check_if_binaries_exist(&binary_for_debug, &network, &version)? {
                     println!("Adding component: {binary}-{version}");
-                    extract_component(binary, network, &filename)
+                    extract_component(&binary_for_debug, network, &filename)
                         .map_err(|_| anyhow!("Could not extract component"))?;
                     let filename = format!("{}-{}", binary, version);
                     #[cfg(target_os = "windows")]
@@ -83,10 +90,12 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                         let filename = format!("{}.exe", filename);
                     }
                     let binary_path = binaries_folder()?.join(network.to_string()).join(filename);
+                    println!("{:?}", binary_path.display());
                     installed_binaries.add_binary(BinaryVersion {
                         binary_name: binary.to_string(),
                         network_release: network,
                         version: version.clone(),
+                        debug,
                         path: Some(binary_path.to_string_lossy().to_string()),
                     });
                 } else {
@@ -94,7 +103,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 }
             }
             installed_binaries.save_to_file()?;
-            update_after_install(&name, network, &version)?;
+            update_after_install(&name, network, &version, debug)?;
         }
         ComponentCommands::Remove { binaries } => {
             // remove from default file
@@ -123,7 +132,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 default_file_path().map_err(|e| anyhow!("Cannot find default file: {e}"))?;
             let default_binaries = std::fs::read_to_string(&default_file)
                 .map_err(|_| anyhow!("Cannot read file {}", default_file.display()))?;
-            let mut default_binaries: HashMap<String, (Network, Version)> =
+            let mut default_binaries: HashMap<String, (Network, Version, bool)> =
                 serde_json::from_str(&default_binaries)
                     .map_err(|_| anyhow!("Cannot decode default binary file to JSON"))?;
 
@@ -170,7 +179,8 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
     match cmd {
         DefaultCommands::Get => {
             let default = std::fs::read_to_string(default_file_path()?)?;
-            let default: HashMap<String, (Network, Version)> = serde_json::from_str(&default)?;
+            let default: HashMap<String, (Network, Version, bool)> =
+                serde_json::from_str(&default)?;
             let default_binaries = Binaries::from(default);
             println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");
         }
@@ -179,6 +189,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             name,
             network_release: network,
             version,
+            debug,
         } => {
             // a map of network --> to BinaryVersion
             let installed_binaries = installed_binaries_grouped_by_network(None)?;
@@ -215,7 +226,11 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             let mut dst = default_bin_folder()?;
             #[cfg(target_os = "windows")]
             {
-                let name = format!("{}.exe", name);
+                let name = if debug {
+                    format!("{}-debug.exe", name)
+                } else {
+                    format!("{}.exe", name)
+                };
             }
             dst.push(&name);
 
@@ -225,10 +240,14 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             {
                 let binary_version = format!("{}.exe", binary_version);
             }
-            src.push(binary_version);
+            if debug {
+                src.push(format!("{}-debug-{}", name, version));
+            } else {
+                src.push(binary_version);
+            }
 
             std::fs::copy(src, dst)?;
-            update_default_version_file(&vec![name], network, &version)?
+            update_default_version_file(&vec![name], network, &version, debug)?
         }
     }
 
@@ -238,7 +257,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
 /// Handles the `show` command
 pub fn handle_show() -> Result<(), Error> {
     let default = std::fs::read_to_string(default_file_path()?)?;
-    let default: HashMap<String, (Network, Version)> = serde_json::from_str(&default)?;
+    let default: HashMap<String, (Network, Version, bool)> = serde_json::from_str(&default)?;
     let default_binaries = Binaries::from(default);
 
     println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");
@@ -310,6 +329,7 @@ pub async fn handle_update(name: String) -> Result<(), Error> {
             name: vec![name.clone()],
             network_release: Network::from_str(n)?,
             version: Some(v.clone()),
+            debug: false,
         })
         .await?;
     }
@@ -559,7 +579,12 @@ fn binaries_folder() -> Result<PathBuf, anyhow::Error> {
 
 /// Prompts the user and asks if they want to update the default version with the one that was just
 /// installed.
-fn update_after_install(name: &Vec<String>, network: Network, version: &str) -> Result<(), Error> {
+fn update_after_install(
+    name: &Vec<String>,
+    network: Network,
+    version: &str,
+    debug: bool,
+) -> Result<(), Error> {
     let prompt = "Do you want to set this new installed version as the default one? [y/N] ";
 
     print!("{prompt}");
@@ -580,7 +605,12 @@ fn update_after_install(name: &Vec<String>, network: Network, version: &str) -> 
     match input.as_str() {
         "y" | "yes" => {
             for binary in name {
-                let filename = format!("{}-{}", binary, version);
+                let filename = if debug {
+                    format!("{}-debug-{}", binary, version)
+                } else {
+                    format!("{}-{}", binary, version)
+                };
+
                 #[cfg(target_os = "windows")]
                 {
                     let filename = format!("{}.exe", filename);
@@ -596,7 +626,7 @@ fn update_after_install(name: &Vec<String>, network: Network, version: &str) -> 
 
                 println!("[{network}] {binary}-{version} set as default");
             }
-            update_default_version_file(name, network, version)?;
+            update_default_version_file(name, network, version, debug)?;
         }
 
         "" | "n" | "no" => {
@@ -604,7 +634,7 @@ fn update_after_install(name: &Vec<String>, network: Network, version: &str) -> 
         }
         _ => {
             println!("Invalid input. Please enter 'y' or 'n'.");
-            update_after_install(name, network, version)?;
+            update_after_install(name, network, version, debug)?;
         }
     }
     Ok(())
@@ -615,20 +645,22 @@ fn update_default_version_file(
     binaries: &Vec<String>,
     network: Network,
     version: &str,
+    debug: bool,
 ) -> Result<(), Error> {
     let path = default_file_path()?;
     let file = File::open(&path)?;
     let reader = BufReader::new(file);
     println!("Updating default version file...");
-    let mut map: HashMap<String, (Network, Version)> = serde_json::from_reader(reader)?;
+    let mut map: HashMap<String, (Network, Version, bool)> = serde_json::from_reader(reader)?;
 
     for binary in binaries {
         let b = map.get_mut(binary);
         if let Some(b) = b {
             b.0 = network;
             b.1 = version.to_string();
+            b.2 = debug;
         } else {
-            map.insert(binary.to_string(), (network, version.to_string()));
+            map.insert(binary.to_string(), (network, version.to_string(), debug));
         }
     }
 
