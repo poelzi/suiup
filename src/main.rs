@@ -12,13 +12,133 @@ mod handle_commands;
 mod types;
 use commands::{Commands, ComponentCommands, Suiup};
 
-const GITHUB_REPO: &str = "mystenlabs/sui";
+use std::env;
+use std::path::PathBuf;
+
+const GITHUB_REPO: &str = "MystenLabs/sui";
 const RELEASES_ARCHIVES_FOLDER: &str = "releases";
-const SUIUP_FOLDER: &str = ".suiup";
-const BINARIES_FOLDER: &str = "binaries";
-const DEFAULT_BIN_FOLDER: &str = "default-bin";
-const DEFAULT_VERSION_FILENAME: &str = "default_version.json";
-const INSTALLED_BINARIES_FILENAME: &str = "installed_binaries.json";
+
+fn get_data_home() -> PathBuf {
+    #[cfg(windows)]
+    {
+        env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let mut home = PathBuf::from(env::var_os("USERPROFILE").expect("USERPROFILE not set"));
+                home.push("AppData");
+                home.push("Local");
+                home
+            })
+    }
+
+    #[cfg(not(windows))]
+    {
+        env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let mut home = PathBuf::from(env::var_os("HOME").expect("HOME not set"));
+                home.push(".local");
+                home.push("share");
+                home
+            })
+    }
+}
+
+fn get_config_home() -> PathBuf {
+    #[cfg(windows)]
+    {
+        env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let mut home = PathBuf::from(env::var_os("USERPROFILE").expect("USERPROFILE not set"));
+                home.push("AppData");
+                home.push("Local");
+                home
+            })
+    }
+
+    #[cfg(not(windows))]
+    {
+        env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let mut home = PathBuf::from(env::var_os("HOME").expect("HOME not set"));
+                home.push(".config");
+                home
+            })
+    }
+}
+
+fn get_cache_home() -> PathBuf {
+    #[cfg(windows)]
+    {
+        env::var_os("TEMP")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let mut home = PathBuf::from(env::var_os("USERPROFILE").expect("USERPROFILE not set"));
+                home.push("AppData");
+                home.push("Local");
+                home.push("Temp");
+                home
+            })
+    }
+
+    #[cfg(not(windows))]
+    {
+        env::var_os("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let mut home = PathBuf::from(env::var_os("HOME").expect("HOME not set"));
+                home.push(".cache");
+                home
+            })
+    }
+}
+
+fn get_suiup_data_dir() -> PathBuf {
+    let mut path = get_data_home();
+    path.push("suiup");
+    path
+}
+
+fn get_suiup_config_dir() -> PathBuf {
+    let mut path = get_config_home();
+    path.push("suiup");
+    path
+}
+
+fn get_suiup_cache_dir() -> PathBuf {
+    let mut path = get_cache_home();
+    path.push("suiup");
+    path
+}
+
+fn get_default_bin_dir() -> PathBuf {
+    #[cfg(windows)]
+    {
+        let mut path = PathBuf::from(
+            env::var_os("LOCALAPPDATA")
+                .expect("LOCALAPPDATA not set"),
+        );
+        path.push(".local");
+        path.push("bin");
+        path
+    }
+
+    #[cfg(not(windows))]
+    {
+        let mut path = PathBuf::from(env::var_os("HOME").expect("HOME not set"));
+        path.push(".local");
+        path.push("bin");
+        path
+    }
+}
+
+fn get_config_file(name: &str) -> PathBuf {
+    let mut path = get_suiup_config_dir();
+    path.push(name);
+    path
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -32,18 +152,19 @@ async fn main() -> Result<(), Error> {
             name,
             network_release,
             version,
+            nightly,
         } => {
             handle_component(ComponentCommands::Add {
                 name,
-                network_release,
+                network_release: network_release.unwrap_or_else(|| "testnet".to_string()),
                 version,
                 debug: false,
+                nightly,
             })
             .await?
         }
         Commands::Show => handle_show()?,
         Commands::Update { name } => handle_update(name).await?,
-        Commands::Override => handle_override(),
         Commands::Which => handle_which()?,
     }
     Ok(())

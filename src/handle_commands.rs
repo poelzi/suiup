@@ -2,6 +2,15 @@ use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
 use flate2::read::GzDecoder;
+use futures_util::StreamExt;
+use indicatif::HumanBytes;
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderValue;
+use reqwest::header::ETAG;
+use reqwest::header::IF_NONE_MATCH;
+use reqwest::header::USER_AGENT;
 use reqwest::Client;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -11,10 +20,11 @@ use std::io::BufReader;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
-use std::str::FromStr;
+use std::process::Command;
+use std::process::Stdio;
+use std::time::Duration;
+use std::time::Instant;
 use tar::Archive;
-use trauma::download::Download;
-use trauma::downloader::DownloaderBuilder;
 
 use crate::commands::ComponentCommands;
 use crate::commands::DefaultCommands;
@@ -24,13 +34,13 @@ use crate::types::InstalledBinaries;
 use crate::types::Network;
 use crate::types::Release;
 use crate::types::Version;
-use crate::BINARIES_FOLDER;
-use crate::DEFAULT_BIN_FOLDER;
-use crate::DEFAULT_VERSION_FILENAME;
-use crate::GITHUB_REPO;
-use crate::INSTALLED_BINARIES_FILENAME;
-use crate::RELEASES_ARCHIVES_FOLDER;
-use crate::SUIUP_FOLDER;
+use crate::{
+    get_cache_home, get_config_file, get_config_home, get_data_home, get_default_bin_dir,
+    get_suiup_cache_dir, get_suiup_config_dir, get_suiup_data_dir, GITHUB_REPO,
+    RELEASES_ARCHIVES_FOLDER,
+};
+use std::cmp::min;
+use std::env;
 
 fn available_components() -> &'static [&'static str] {
     &["sui", "sui-bridge", "sui-faucet", "walrus"]
@@ -50,8 +60,8 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             network_release: network,
             version,
             debug,
+            nightly,
         } => {
-            println!("Debug build: {debug}");
             if name.is_empty() {
                 print!("No components provided. Use `suiup component list` to see available components.");
                 return Ok(());
@@ -65,8 +75,64 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 }
             }
 
+            if let Some(nightly) = nightly.clone() {
+                let bins = name.join(" ");
+                println!("Installing {bins} from {nightly} branch");
+                check_cargo_rust_installed()?;
+                let pb = ProgressBar::new_spinner();
+                pb.set_style(
+                    ProgressStyle::with_template("{spinner:.green} {msg}")
+                        .unwrap()
+                        .tick_strings(&["-", "\\", "|", "/"]),
+                ); // Custom spinner style
+                pb.enable_steady_tick(Duration::from_millis(100)); // Update every 100 ms
+
+                // Set an initial message
+                pb.set_message("Compiling...please wait");
+                let cmd = Command::new("cargo")
+                    .args(&[
+                        "install",
+                        "--locked",
+                        "--git",
+                        "https://github.com/MystenLabs/sui",
+                        "--branch",
+                        &nightly,
+                        &bins,
+                        "--path",
+                        binaries_folder()?.join(&nightly).to_str().unwrap(),
+                    ])
+                    .stdout(Stdio::null()) // Suppress standard output on all platforms
+                    .stderr(Stdio::piped()) // Capture standard error
+                    .spawn()?;
+
+                // Wait for the command to finish
+                let output = cmd.wait_with_output()?;
+                pb.finish_with_message("Done!");
+                if output.status.success() {
+                    println!("Installation completed successfully!");
+                } else {
+                    let error_message = String::from_utf8_lossy(&output.stderr);
+                    eprintln!("Error during installation:\n{}", error_message);
+                }
+                let mut installed_binaries = InstalledBinaries::new()?;
+                for binary in &name {
+                    let binary_path = binaries_folder()?.join(nightly.clone()).join(&binary);
+                    installed_binaries.add_binary(BinaryVersion {
+                        binary_name: binary.to_string(),
+                        network_release: nightly.clone(),
+                        version: "nightly".to_string(),
+                        path: Some(binary_path.to_string_lossy().to_string()),
+                        debug,
+                    });
+                }
+                installed_binaries.save_to_file()?;
+                update_after_install(&name, nightly.clone(), "nightly", debug)?;
+
+                return Ok(());
+            }
+
             let filename = if let Some(version) = version {
-                download_release_at_version(&network.to_string(), &version).await?
+                download_release_at_version(&network, &version).await?
             } else {
                 download_latest_release(&network.to_string())
                     .await
@@ -80,9 +146,9 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 } else {
                     binary.to_string()
                 };
-                if !check_if_binaries_exist(&binary_for_debug, &network, &version)? {
+                if !check_if_binaries_exist(&binary_for_debug, network.clone(), &version)? {
                     println!("Adding component: {binary}-{version}");
-                    extract_component(&binary_for_debug, network, &filename)
+                    extract_component(&binary_for_debug, network.clone(), &filename)
                         .map_err(|_| anyhow!("Could not extract component"))?;
                     let filename = format!("{}-{}", binary, version);
                     #[cfg(target_os = "windows")]
@@ -93,7 +159,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                     println!("{:?}", binary_path.display());
                     installed_binaries.add_binary(BinaryVersion {
                         binary_name: binary.to_string(),
-                        network_release: network,
+                        network_release: network.clone(),
                         version: version.clone(),
                         debug,
                         path: Some(binary_path.to_string_lossy().to_string()),
@@ -103,7 +169,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 }
             }
             installed_binaries.save_to_file()?;
-            update_after_install(&name, network, &version, debug)?;
+            update_after_install(&name, network.clone(), &version, debug)?;
         }
         ComponentCommands::Remove { binaries } => {
             // remove from default file
@@ -161,7 +227,8 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             }
 
             // Remove from default binaries metadata file
-            File::create(&default_file)?
+            File::create(&default_file)
+                .map_err(|_| anyhow!("Cannot create file: {}", default_file.display()))?
                 .write_all(serde_json::to_string_pretty(&default_binaries)?.as_bytes())?;
 
             // Remove from installed_binaries metadata file
@@ -179,37 +246,43 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
     match cmd {
         DefaultCommands::Get => {
             let default = std::fs::read_to_string(default_file_path()?)?;
-            let default: HashMap<String, (Network, Version, bool)> =
-                serde_json::from_str(&default)?;
+            let default: HashMap<String, (String, Version, bool)> = serde_json::from_str(&default)?;
             let default_binaries = Binaries::from(default);
             println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");
         }
 
         DefaultCommands::Set {
             name,
-            network_release: network,
+            network_release,
             version,
             debug,
         } => {
+            let network = network_release.unwrap_or_else(|| "testnet".to_string());
+            
             // a map of network --> to BinaryVersion
             let installed_binaries = installed_binaries_grouped_by_network(None)?;
             let binaries = installed_binaries
-                .get(&network.to_string())
+                .get(&network)
                 .ok_or_else(|| anyhow!("No binaries installed for {network}"))?;
-            for (_, bins) in &installed_binaries {
-                if !bins.iter().any(|x| x.binary_name == name) {
-                    bail!("Binary {name} not found in installed binaries. Use `suiup show` to see installed binaries.")
-                }
+
+            // Check if the binary exists in any network
+            let binary_exists = installed_binaries.values().any(|bins| {
+                bins.iter().any(|x| x.binary_name == name)
+            });
+            if !binary_exists {
+                bail!("Binary {name} not found in installed binaries. Use `suiup show` to see installed binaries.");
             }
 
-            let version = version.unwrap_or_else(|| {
+            let version = if let Some(version) = version {
+                version
+            } else {
                 binaries
                     .iter()
+                    .filter(|b| b.binary_name == name)
                     .max_by(|a, b| a.version.cmp(&b.version))
-                    .unwrap()
-                    .version
-                    .clone()
-            });
+                    .map(|b| b.version.clone())
+                    .ok_or_else(|| anyhow!("No version found for {name} in {network}"))?
+            };
 
             // check if the binary for this network and version exists
             let binary_version = format!("{}-{}", name, version);
@@ -246,8 +319,21 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                 src.push(binary_version);
             }
 
-            std::fs::copy(src, dst)?;
-            update_default_version_file(&vec![name], network, &version, debug)?
+            #[cfg(not(target_os = "windows"))]
+            {
+                if dst.exists() {
+                    std::fs::remove_file(&dst)?;
+                }
+                std::os::unix::fs::symlink(&src, &dst)?;
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                std::fs::copy(&src, &dst)?;
+            }
+
+            update_default_version_file(&vec![name], network, &version, debug)?;
+            println!("Default binary updated successfully");
         }
     }
 
@@ -257,7 +343,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
 /// Handles the `show` command
 pub fn handle_show() -> Result<(), Error> {
     let default = std::fs::read_to_string(default_file_path()?)?;
-    let default: HashMap<String, (Network, Version, bool)> = serde_json::from_str(&default)?;
+    let default: HashMap<String, (String, Version, bool)> = serde_json::from_str(&default)?;
     let default_binaries = Binaries::from(default);
 
     println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");
@@ -310,7 +396,7 @@ pub async fn handle_update(name: String) -> Result<(), Error> {
     // find the last local version of the name binary, for each network
     // then find the last release for each network and compare the versions
 
-    let releases = release_list().await?;
+    let releases = release_list().await?.0;
     let mut to_update = vec![];
     for (n, v) in &network_local_last_version {
         let last_release = last_release_for_network(&releases, &n).await?;
@@ -327,9 +413,10 @@ pub async fn handle_update(name: String) -> Result<(), Error> {
         println!("Updating {name} to {v} from {n} release");
         handle_component(ComponentCommands::Add {
             name: vec![name.clone()],
-            network_release: Network::from_str(n)?,
+            network_release: n.to_string(),
             version: Some(v.clone()),
             debug: false,
+            nightly: None,
         })
         .await?;
     }
@@ -352,18 +439,105 @@ pub fn handle_which() -> Result<(), Error> {
 }
 
 /// Fetches the list of releases from the GitHub repository
-pub(crate) async fn release_list() -> Result<Vec<Release>, anyhow::Error> {
+pub(crate) async fn release_list() -> Result<(Vec<Release>, Option<String>), anyhow::Error> {
     let client = Client::new();
     let release_url = format!("https://api.github.com/repos/{}/releases", GITHUB_REPO);
-    let releases: Vec<Release> = client
-        .get(&release_url)
-        .header("User-Agent", "suiup")
-        .send()
-        .await?
-        .json()
-        .await?;
+    let mut request = client.get(&release_url).header("User-Agent", "suiup");
+    // Add ETag for caching
+    if let Ok(etag) = read_etag_file() {
+        request = request.header(IF_NONE_MATCH, etag);
+    }
 
-    Ok(releases)
+    let response = request.send().await?;
+
+    // note this only works with authenticated requests. Should add support for that later.
+    if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+        // If nothing has changed, return an empty list and the existing ETag
+        if let Some((releases, etag)) = load_cached_release_list()
+            .map_err(|e| anyhow!("Cannot load release list from cache: {e}"))?
+        {
+            return Ok((releases, Some(etag)));
+        }
+    }
+
+    let etag = response
+        .headers()
+        .get(ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+    let releases: Vec<Release> = response.json().await?;
+    save_release_list(&releases, etag.clone())?;
+
+    Ok((releases, etag))
+}
+
+fn cache_path() -> PathBuf {
+    let cache_dir = dirs::cache_dir().expect("Could not find cache directory");
+    if !cache_dir.exists() {
+        std::fs::create_dir_all(&cache_dir.join("suiup"))
+            .expect("Could not create cache directory");
+    }
+    cache_dir.join("suiup")
+}
+
+fn load_cached_release_list() -> Result<Option<(Vec<Release>, String)>, anyhow::Error> {
+    let cache_file = cache_path().join("releases.json");
+    let etag_file = cache_path().join("etag.txt");
+
+    if cache_file.exists() && etag_file.exists() {
+        println!("Loading releases list from cache");
+        let cache_content: Vec<Release> = serde_json::from_str(
+            &std::fs::read_to_string(&cache_file)
+                .map_err(|_| anyhow!("Cannot read from file {}", cache_file.display()))?,
+        )
+        .map_err(|_| {
+            anyhow!(
+                "Cannot deserialize the releases cached file {}",
+                cache_file.display()
+            )
+        })?;
+        let etag_content = std::fs::read_to_string(&etag_file)
+            .map_err(|_| anyhow!("Cannot read from file {}", etag_file.display()))?;
+
+        Ok(Some((cache_content, etag_content)))
+    } else {
+        Ok(None)
+    }
+}
+
+fn save_release_list(releases: &[Release], etag: Option<String>) -> Result<(), anyhow::Error> {
+    println!("Saving releases list to cache");
+    let cache_dir = cache_path();
+    std::fs::create_dir_all(&cache_dir).expect("Could not create cache directory");
+
+    let cache_file = cache_dir.join("releases.json");
+    let etag_file = cache_dir.join("etag.txt");
+
+    let cache_content =
+        serde_json::to_string_pretty(releases).expect("Could not serialize releases file: {}");
+
+    std::fs::write(&cache_file, cache_content).map_err(|_| {
+        anyhow!(
+            "Could not write cache releases file: {}",
+            cache_file.display(),
+        )
+    })?;
+    if let Some(etag) = etag {
+        std::fs::write(&etag_file, etag)
+            .map_err(|_| anyhow!("Could not write ETag file: {}", etag_file.display()))?;
+    }
+    Ok(())
+}
+
+fn read_etag_file() -> Result<String, anyhow::Error> {
+    let etag_file = cache_path().join("etag.txt");
+    if etag_file.exists() {
+        let etag = std::fs::read_to_string(&etag_file)
+            .map_err(|_| anyhow!("Cannot read from file {}", etag_file.display()));
+        etag
+    } else {
+        Ok("".to_string())
+    }
 }
 
 /// Finds the last release for a given network
@@ -402,31 +576,42 @@ async fn download_release_at_version(
     let tag = format!("{}-{}", network, version);
 
     println!("Searching for release with tag: {}...", tag);
-    let client = Client::new();
-    let release_url = format!(
-        "https://api.github.com/repos/{}/releases/tags/{tag}",
-        GITHUB_REPO
-    );
-    let response = client
-        .get(&release_url)
-        .header("User-Agent", "suiup")
-        .send()
-        .await?;
-    if !response.status().is_success() {
-        anyhow::bail!("release {tag} not found");
-    }
+    let client = reqwest::Client::new();
+    let mut headers = HeaderMap::new();
 
-    let release: Release = response.json().await?;
-    download_asset_from_github(&release, network, &os, &arch).await
+    let releases = release_list().await?.0;
+
+    if let Some(release) = releases
+        .iter()
+        .find(|r| r.assets.iter().any(|a| a.name.contains(&tag)))
+    {
+        download_asset_from_github(release, &os, &arch).await
+    } else {
+        headers.insert(USER_AGENT, HeaderValue::from_static("suiup"));
+
+        let url = format!(
+            "https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{}",
+            tag
+        );
+        let response = client.get(&url).headers(headers).send().await?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("release {tag} not found");
+        }
+
+        let release: Release = response.json().await?;
+        download_asset_from_github(&release, &os, &arch).await
+    }
 }
 
 /// Downloads the latest release for a given network
 async fn download_latest_release(network: &str) -> Result<String, anyhow::Error> {
+    println!("Downloading release list");
     let releases = release_list().await?;
 
     let (os, arch) = detect_os_arch()?;
 
-    let last_release = find_last_release_by_network(releases, network)
+    let last_release = find_last_release_by_network(releases.0, network)
         .await
         .ok_or_else(|| anyhow!("Could not find last release"))?;
 
@@ -435,7 +620,7 @@ async fn download_latest_release(network: &str) -> Result<String, anyhow::Error>
         extract_version_from_release(&last_release.assets[0].name)?
     );
 
-    download_asset_from_github(&last_release, network, &os, &arch).await
+    download_asset_from_github(&last_release, &os, &arch).await
 }
 
 /// Downloads the archived release from GitHub and returns the file name
@@ -443,7 +628,6 @@ async fn download_latest_release(network: &str) -> Result<String, anyhow::Error>
 /// architecture and OS
 async fn download_asset_from_github(
     release: &Release,
-    network: &str,
     os: &str,
     arch: &str,
 ) -> Result<String, anyhow::Error> {
@@ -451,22 +635,53 @@ async fn download_asset_from_github(
         .assets
         .iter()
         .find(|&a| a.name.contains(arch) && a.name.contains(os.to_string().to_lowercase().as_str()))
-        .ok_or_else(|| anyhow!("Asset not found"))?;
+        .ok_or_else(|| anyhow!("Asset not found for {os}-{arch}"))?;
 
+    let response = Client::new()
+        .get(&asset.browser_download_url)
+        .send()
+        .await?;
+    let total_size = response.content_length().unwrap_or(0);
     // Find the archive file for the current OS and architecture
 
     let path = release_archive_folder()?;
     let mut file_path = path.clone();
     file_path.push(&asset.name);
     if file_path.exists() {
-        println!("Found release archive {} in cache", asset.name);
-        return Ok(asset.name.to_string());
+        if file_path.metadata()?.len() == total_size {
+            println!("Found release archive {} in cache", asset.name);
+            return Ok(asset.name.to_string());
+        } else {
+            std::fs::remove_file(&file_path)?;
+        }
     }
 
-    println!("Downloading {network} release: {}...", asset.name);
-    let downloads = vec![Download::try_from(asset.browser_download_url.as_str()).unwrap()];
-    let downloader = DownloaderBuilder::new().directory(path).build();
-    downloader.download(&downloads).await;
+    let pb = ProgressBar::new(total_size);
+    pb.set_style(ProgressStyle::default_bar()
+        .template("Downloading release: {spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
+        .unwrap()
+        .progress_chars("=>-"));
+
+    let mut file = File::create(file_path)?;
+    let mut downloaded: u64 = 0;
+    let mut stream = response.bytes_stream();
+    let start = Instant::now();
+
+    while let Some(item) = stream.next().await {
+        let chunk = item?;
+        file.write_all(&chunk)?;
+        let new = min(downloaded + (chunk.len() as u64), total_size);
+        downloaded = new;
+        pb.set_position(new);
+
+        let elapsed = start.elapsed().as_secs_f64();
+        if elapsed > 0.0 {
+            let speed = downloaded as f64 / elapsed;
+            pb.set_message(format!("Speed: {}/s", HumanBytes(speed as u64)));
+        }
+    }
+
+    pb.finish_with_message("Download completed");
 
     Ok(asset.name.to_string())
 }
@@ -476,11 +691,12 @@ async fn download_asset_from_github(
 ///
 /// This extracts the component to the binaries folder under the network from which release comes
 /// from, and sets the correct permissions for Unix based systems.
-fn extract_component(binary: &str, network: Network, filename: &str) -> Result<(), Error> {
+fn extract_component(binary: &str, network: String, filename: &str) -> Result<(), Error> {
     let mut archive_path = release_archive_folder()?;
     archive_path.push(filename);
 
-    let file = File::open(archive_path.as_path())?;
+    let file = File::open(archive_path.as_path())
+        .map_err(|_| anyhow!("Cannot open archive file: {}", archive_path.display()))?;
     let tar = GzDecoder::new(file);
     let mut archive = Archive::new(tar);
 
@@ -530,23 +746,17 @@ pub(crate) fn extract_version_from_release(release: &str) -> Result<String, Erro
 
 /// Returns the path to the Suiup configuration folder. The folder is created if it does not exist.
 fn config_folder_or_create() -> Result<PathBuf, anyhow::Error> {
-    let mut path = std::path::PathBuf::new();
-
-    let home_dir = dirs::home_dir().ok_or_else(|| anyhow!("Could not find home directory"))?;
-    path.push(home_dir);
-    path.push(SUIUP_FOLDER);
+    let path = get_suiup_config_dir();
     if !path.is_dir() {
         std::fs::create_dir_all(path.as_path())
             .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
     }
-
     Ok(path)
 }
 
 /// Returns the path to the default binaries folder. The folder is created if it does not exist.
 fn default_bin_folder() -> Result<PathBuf, anyhow::Error> {
-    let mut path = config_folder_or_create()?;
-    path.push(DEFAULT_BIN_FOLDER);
+    let path = get_default_bin_dir();
     if !path.is_dir() {
         std::fs::create_dir_all(path.as_path())
             .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
@@ -557,7 +767,7 @@ fn default_bin_folder() -> Result<PathBuf, anyhow::Error> {
 /// Returns the path to the releases archives folder. The folder is created if it does not exist.
 /// This is used to cache the release archives.
 fn release_archive_folder() -> Result<PathBuf, anyhow::Error> {
-    let mut path = config_folder_or_create()?;
+    let mut path = get_suiup_cache_dir();
     path.push(RELEASES_ARCHIVES_FOLDER);
     if !path.is_dir() {
         std::fs::create_dir_all(path.as_path())
@@ -568,8 +778,8 @@ fn release_archive_folder() -> Result<PathBuf, anyhow::Error> {
 
 /// Returns the path to the binaries folder. The folder is created if it does not exist.
 fn binaries_folder() -> Result<PathBuf, anyhow::Error> {
-    let mut path = config_folder_or_create()?;
-    path.push(BINARIES_FOLDER);
+    let mut path = get_suiup_data_dir();
+    path.push("binaries");
     if !path.is_dir() {
         std::fs::create_dir_all(path.as_path())
             .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
@@ -581,7 +791,7 @@ fn binaries_folder() -> Result<PathBuf, anyhow::Error> {
 /// installed.
 fn update_after_install(
     name: &Vec<String>,
-    network: Network,
+    network: String,
     version: &str,
     debug: bool,
 ) -> Result<(), Error> {
@@ -620,13 +830,28 @@ fn update_after_install(
                 src.push(filename);
 
                 let mut dst = default_bin_folder()?;
+                // Just use the binary name without version for the symlink
                 dst.push(binary);
 
-                std::fs::copy(src, dst)?;
+                // On Unix systems, create a symlink instead of copying
+                #[cfg(not(target_os = "windows"))]
+                {
+                    if dst.exists() {
+                        std::fs::remove_file(&dst)?;
+                    }
+                    std::os::unix::fs::symlink(&src, &dst)?;
+                }
+
+                // On Windows, copy the file
+                #[cfg(target_os = "windows")]
+                {
+                    std::fs::copy(&src, &dst)?;
+                }
 
                 println!("[{network}] {binary}-{version} set as default");
             }
             update_default_version_file(name, network, version, debug)?;
+            check_path_and_warn()?;
         }
 
         "" | "n" | "no" => {
@@ -643,7 +868,7 @@ fn update_after_install(
 /// Updates the default version file with the new installed version.
 fn update_default_version_file(
     binaries: &Vec<String>,
-    network: Network,
+    network: String,
     version: &str,
     debug: bool,
 ) -> Result<(), Error> {
@@ -651,16 +876,19 @@ fn update_default_version_file(
     let file = File::open(&path)?;
     let reader = BufReader::new(file);
     println!("Updating default version file...");
-    let mut map: HashMap<String, (Network, Version, bool)> = serde_json::from_reader(reader)?;
+    let mut map: HashMap<String, (String, Version, bool)> = serde_json::from_reader(reader)?;
 
     for binary in binaries {
         let b = map.get_mut(binary);
         if let Some(b) = b {
-            b.0 = network;
+            b.0 = network.clone();
             b.1 = version.to_string();
             b.2 = debug;
         } else {
-            map.insert(binary.to_string(), (network, version.to_string(), debug));
+            map.insert(
+                binary.to_string(),
+                (network.clone(), version.to_string(), debug),
+            );
         }
     }
 
@@ -671,7 +899,7 @@ fn update_default_version_file(
 }
 
 /// Checks if the binaries exist in the binaries folder
-fn check_if_binaries_exist(binary: &str, network: &Network, version: &str) -> Result<bool, Error> {
+fn check_if_binaries_exist(binary: &str, network: String, version: &str) -> Result<bool, Error> {
     let mut path = binaries_folder()?;
     path.push(network.to_string());
     let binary_version = format!("{}-{}", binary, version);
@@ -685,8 +913,7 @@ fn check_if_binaries_exist(binary: &str, network: &Network, version: &str) -> Re
 
 /// Returns the path to the default version file. The file is created if it does not exist.
 fn default_file_path() -> Result<PathBuf, Error> {
-    let mut path = config_folder_or_create()?;
-    path.push(DEFAULT_VERSION_FILENAME);
+    let path = get_config_file("default_version.json");
     if !path.exists() {
         let mut file = File::create(&path)?;
         let default = HashMap::<String, (String, String)>::new();
@@ -720,23 +947,22 @@ fn installed_binaries_grouped_by_network(
 }
 
 pub(crate) fn installed_binaries_file() -> Result<PathBuf, Error> {
-    let mut path = config_folder_or_create()?;
-    path.push(INSTALLED_BINARIES_FILENAME);
+    let path = get_config_file("installed_binaries.json");
     if !path.exists() {
         InstalledBinaries::create_file(&path)?;
     }
-
     Ok(path)
 }
 
 pub(crate) fn initialize() -> Result<(), Error> {
-    config_folder_or_create()?;
+    std::fs::create_dir_all(get_suiup_config_dir())?;
+    std::fs::create_dir_all(get_suiup_data_dir())?;
+    std::fs::create_dir_all(get_suiup_cache_dir())?;
     binaries_folder()?;
     release_archive_folder()?;
     default_bin_folder()?;
     default_file_path()?;
     installed_binaries_file()?;
-
     Ok(())
 }
 
@@ -755,4 +981,79 @@ pub(crate) async fn last_release_for_network<'a>(
     } else {
         bail!("No release found for {network}")
     }
+}
+
+fn check_cargo_rust_installed() -> Result<(), Error> {
+    if let Ok(output) = Command::new("rustc").arg("--version").output() {
+        if output.status.success() {
+            print!(
+                "Rust is installed: {}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+        } else {
+            bail!("Rust is not installed");
+        }
+    } else {
+        bail!("Failed to execute rustc command");
+    }
+
+    // Check if cargo is installed
+    if let Ok(output) = Command::new("cargo").arg("--version").output() {
+        if output.status.success() {
+            print!(
+                "Cargo is installed: {}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+        } else {
+            bail!("Cargo is not installed");
+        }
+    } else {
+        bail!("Failed to execute cargo command");
+    }
+    Ok(())
+}
+
+fn check_path_and_warn() -> Result<(), Error> {
+    let local_bin = get_default_bin_dir();
+    
+    // Check if the bin directory exists in PATH
+    if let Ok(path) = env::var("PATH") {
+        #[cfg(windows)]
+        let path_separator = ';';
+        #[cfg(not(windows))]
+        let path_separator = ':';
+
+        if !path.split(path_separator).any(|p| PathBuf::from(p) == local_bin) {
+            println!("\nWARNING: {} is not in your PATH", local_bin.display());
+
+            #[cfg(windows)]
+            {
+                println!("\nTo add it to your PATH:");
+                println!("1. Press Win + X and select 'System'");
+                println!("2. Click on 'Advanced system settings'");
+                println!("3. Click on 'Environment Variables'");
+                println!("4. Under 'User variables', find and select 'Path'");
+                println!("5. Click 'Edit'");
+                println!("6. Click 'New'");
+                println!("7. Add the following path:");
+                println!("    %USERPROFILE%\\.local\\bin");
+                println!("8. Click 'OK' on all windows");
+                println!("9. Restart your terminal\n");
+            }
+
+            #[cfg(not(windows))]
+            {
+                println!("Add one of the following lines depending on your shell:");
+                println!("\nFor bash/zsh (~/.bashrc or ~/.zshrc):");
+                println!("    export PATH=\"$HOME/.local/bin:$PATH\"");
+                println!("\nFor fish (~/.config/fish/config.fish):");
+                println!("    fish_add_path $HOME/.local/bin");
+                println!("\nThen restart your shell or run one of:");
+                println!("    source ~/.bashrc        # for bash");
+                println!("    source ~/.zshrc         # for zsh");
+                println!("    source ~/.config/fish/config.fish  # for fish\n");
+            }
+        }
+    }
+    Ok(())
 }

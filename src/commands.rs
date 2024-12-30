@@ -1,7 +1,5 @@
 use clap::{Parser, Subcommand};
 
-use crate::types::Network;
-
 #[derive(Parser)]
 #[command(name = "suiup")]
 #[command(about = "Sui Tooling Version Manager.")]
@@ -19,21 +17,29 @@ pub(crate) enum Commands {
     #[command(about = "Install one or more components. Shortcut of `suiup component add`")]
     Install {
         name: Vec<String>,
-        #[arg(long, value_enum, default_value_t = Network::Testnet)]
-        network_release: Network,
+        #[arg(long, required=false, default_missing_value = "testnet", num_args=0..=1)]
+        network_release: Option<String>,
         #[arg(
             long,
             help = "Version of the component to install. If not provided, the latest version will be installed."
         )]
         version: Option<String>,
+        #[arg(
+            long,
+            required = false,
+            value_name = "branch",
+            conflicts_with_all = &["version", "network_release"],
+            default_missing_value = "main",
+            num_args = 0..=1,
+            help = "Install from a branch. If none provided, main is used. Note that this requires Rust & cargo to be installed."
+        )]
+        nightly: Option<String>,
     },
     #[command(about = "Show installed and active Sui binaries")]
     Show,
     #[command(about = "Update binary")]
     Update { name: String },
-    #[command(about = "Override project’s CLI version")]
-    Override,
-    #[command(about = "Show the path of the active CLI binary")]
+    #[command(about = "Show the path where default binaries are installed")]
     Which,
 }
 
@@ -44,8 +50,8 @@ pub(crate) enum ComponentCommands {
     #[command(about = "Add one or more components")]
     Add {
         name: Vec<String>,
-        #[arg(long, value_enum, default_value_t = Network::Testnet)]
-        network_release: Network,
+        #[arg(long, default_missing_value = "testnet", required = false, num_args=0..=1)]
+        network_release: String,
         #[arg(
             long,
             help = "Version of the component to install. If not provided, the latest version will be installed."
@@ -56,6 +62,16 @@ pub(crate) enum ComponentCommands {
             help = "Whether to install the debug version of the component (only available for sui). Default is false."
         )]
         debug: bool,
+        #[arg(
+            long,
+            required = false,
+            value_name = "branch",
+            conflicts_with_all = &["version", "network_release"],
+            default_missing_value = "main",
+            num_args = 0..=1,
+            help = "Install from a branch. If none provided, main is used. Note that this requires Rust & cargo to be installed."
+        )]
+        nightly: Option<String>,
     },
     #[command(
         about = "Remove one or more components. By default, the binary from each release will be removed."
@@ -69,25 +85,16 @@ pub(crate) enum DefaultCommands {
     Get,
     #[command(about = "Set the default Sui CLI version")]
     Set {
-        // #[arg(
-        // long,
-        // help = "Component(s) to be set as default. Must be provided, together with the network. If no version is provided, the latest version available locally will be set."
-        // )]
-        /// Component to be set as default. If no network is provided, testnet will be selected. If no
-        /// version is provided, the latest version available locally will be set.
+        /// Component to be set as default
         name: String,
-        #[arg(short, long, value_enum, default_value_t = Network::Testnet)]
-        network_release: Network,
+        #[arg(long, required=false, default_missing_value = "testnet", num_args=0..=1)]
+        network_release: Option<String>,
         #[arg(
-            short,
             long,
-            help = "Version of the component to set to default.",
-            requires = "network_release"
+            help = "Version of the component to set to default."
         )]
-        /// Version of the component to set to default.
         version: Option<String>,
         #[arg(
-            short,
             long,
             help = "Whether to set the debug version of the component as default (only available for sui)."
         )]

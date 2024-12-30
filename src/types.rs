@@ -13,16 +13,15 @@ use crate::handle_commands::installed_binaries_file;
 
 pub type Version = String;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct Release {
     pub assets: Vec<Asset>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct Asset {
     pub browser_download_url: String,
     pub name: String,
-    size: u64,
 }
 
 pub(crate) struct Binaries {
@@ -34,7 +33,7 @@ pub(crate) struct BinaryVersion {
     /// The name of the Sui tool binary
     pub binary_name: String,
     /// The network release of the binary
-    pub network_release: Network,
+    pub network_release: String,
     /// The version of the binary in the corresponding release
     pub version: String,
     /// Debug build of the binary
@@ -45,7 +44,7 @@ pub(crate) struct BinaryVersion {
 
 impl Display for Binaries {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let mut s: HashMap<Network, Vec<(String, String, bool)>> = HashMap::new();
+        let mut s: HashMap<String, Vec<(String, String, bool)>> = HashMap::new();
 
         println!("self: {:?}", self.binaries);
         for b in self.binaries.clone() {
@@ -162,13 +161,13 @@ impl InstalledBinaries {
     }
 }
 
-impl From<HashMap<String, (Network, Version, bool)>> for Binaries {
-    fn from(map: HashMap<String, (Network, Version, bool)>) -> Self {
+impl From<HashMap<String, (String, Version, bool)>> for Binaries {
+    fn from(map: HashMap<String, (String, Version, bool)>) -> Self {
         let binaries = map
             .iter()
             .map(|(k, v)| BinaryVersion {
                 binary_name: k.to_string(),
-                network_release: v.0,
+                network_release: v.0.clone(),
                 version: v.1.to_string(),
                 debug: v.2,
                 path: None,
