@@ -34,13 +34,15 @@ use crate::types::InstalledBinaries;
 use crate::types::Network;
 use crate::types::Release;
 use crate::types::Version;
+use crate::Shell;
 use crate::{
-    get_cache_home, get_config_file, get_config_home, get_data_home, get_default_bin_dir,
+    get_config_file, get_default_bin_dir,
     get_suiup_cache_dir, get_suiup_config_dir, get_suiup_data_dir, GITHUB_REPO,
     RELEASES_ARCHIVES_FOLDER,
 };
 use std::cmp::min;
 use std::env;
+use crate::commands::SuiComponent;
 
 fn available_components() -> &'static [&'static str] {
     &["sui", "sui-bridge", "sui-faucet", "walrus"]
@@ -66,6 +68,9 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 print!("No components provided. Use `suiup component list` to see available components.");
                 return Ok(());
             }
+
+            // Convert SuiComponent to string for further processing
+            let name: Vec<String> = name.into_iter().map(|c| c.to_string()).collect();
 
             let available_components = available_components();
             for c in &name {
@@ -172,6 +177,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             update_after_install(&name, network.clone(), &version, debug)?;
         }
         ComponentCommands::Remove { binaries } => {
+            let binaries: Vec<String> = binaries.into_iter().map(|c| c.to_string()).collect();
             // remove from default file
             // remove from default_bin
             // remove from binaries
@@ -363,11 +369,20 @@ pub fn handle_show() -> Result<(), Error> {
 }
 
 /// Handles the `update` command
-pub async fn handle_update(name: String) -> Result<(), Error> {
+pub async fn handle_update(binary_name: String) -> Result<(), Error> {
+    // Convert String to SuiComponent for validation
+    let component = match binary_name.as_str() {
+        "sui" => SuiComponent::Sui,
+        "sui-bridge" => SuiComponent::SuiBridge,
+        "sui-faucet" => SuiComponent::SuiFaucet,
+        "walrus" => SuiComponent::Walrus,
+        _ => bail!("Invalid component name: {}", binary_name),
+    };
+
     let installed_binaries = InstalledBinaries::new()?;
     let binaries = installed_binaries.binaries();
-    if !binaries.iter().any(|x| x.binary_name == name) {
-        bail!("Binary {name} not found in installed binaries. Use `suiup show` to see installed binaries.")
+    if !binaries.iter().any(|x| x.binary_name == binary_name) {
+        bail!("Binary {binary_name} not found in installed binaries. Use `suiup show` to see installed binaries.")
     }
     let binaries_by_network = installed_binaries_grouped_by_network(Some(installed_binaries))?;
 
@@ -376,7 +391,7 @@ pub async fn handle_update(name: String) -> Result<(), Error> {
     for (network, binaries) in &binaries_by_network {
         let last_version = binaries
             .iter()
-            .filter(|x| x.binary_name == name)
+            .filter(|x| x.binary_name == binary_name)
             .collect::<Vec<_>>();
         if last_version.is_empty() {
             continue;
@@ -402,17 +417,17 @@ pub async fn handle_update(name: String) -> Result<(), Error> {
         let last_release = last_release_for_network(&releases, &n).await?;
         let last_version = last_release.1;
         if v == &last_version {
-            println!("[{n} release] {name} is up to date");
+            println!("[{n} release] {binary_name} is up to date");
         } else {
-            println!("[{n} release] {name} is outdated. Local: {v}, Latest: {last_version}");
+            println!("[{n} release] {binary_name} is outdated. Local: {v}, Latest: {last_version}");
             to_update.push((n, last_version));
         }
     }
 
     for (n, v) in to_update.iter() {
-        println!("Updating {name} to {v} from {n} release");
+        println!("Updating {binary_name} to {v} from {n} release");
         handle_component(ComponentCommands::Add {
-            name: vec![name.clone()],
+            name: vec![component.clone()],
             network_release: n.to_string(),
             version: Some(v.clone()),
             debug: false,
@@ -1056,4 +1071,34 @@ fn check_path_and_warn() -> Result<(), Error> {
         }
     }
     Ok(())
+}
+
+pub(crate) fn print_completion_instructions(shell: &Shell) {
+    match shell {
+        Shell::Bash => {
+            println!("\nTo install bash completions:");
+            println!("1. Create completion directory if it doesn't exist:");
+            println!("    mkdir -p ~/.local/share/bash-completion/completions");
+            println!("2. Add completions to the directory:");
+            println!("    suiup completion bash > ~/.local/share/bash-completion/completions/suiup");
+            println!("\nMake sure you have bash-completion installed and loaded in your ~/.bashrc");
+        }
+        Shell::Fish => {
+            println!("\nTo install fish completions:");
+            println!("1. Create completion directory if it doesn't exist:");
+            println!("    mkdir -p ~/.config/fish/completions");
+            println!("2. Add completions to the directory:");
+            println!("    suiup completion fish > ~/.config/fish/completions/suiup.fish");
+        }
+        Shell::Zsh => {
+            println!("\nTo install zsh completions:");
+            println!("1. Create completion directory if it doesn't exist:");
+            println!("    mkdir -p ~/.zsh/completions");
+            println!("2. Add completions to the directory:");
+            println!("    suiup completion zsh > ~/.zsh/completions/_suiup");
+            println!("3. Add the following to your ~/.zshrc:");
+            println!("    fpath=(~/.zsh/completions $fpath)");
+            println!("    autoload -U compinit; compinit");
+        }
+    }
 }

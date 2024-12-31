@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(name = "suiup")]
@@ -16,7 +16,8 @@ pub(crate) enum Commands {
     Default(DefaultCommands),
     #[command(about = "Install one or more components. Shortcut of `suiup component add`")]
     Install {
-        name: Vec<String>,
+        #[arg(value_enum)]
+        name: Vec<SuiComponent>,
         #[arg(long, required=false, default_missing_value = "testnet", num_args=0..=1)]
         network_release: Option<String>,
         #[arg(
@@ -41,6 +42,11 @@ pub(crate) enum Commands {
     Update { name: String },
     #[command(about = "Show the path where default binaries are installed")]
     Which,
+    #[command(about = "Generate shell completion scripts")]
+    Completion {
+        #[arg(value_enum)]
+        shell: Shell,
+    },
 }
 
 #[derive(Subcommand)]
@@ -49,7 +55,8 @@ pub(crate) enum ComponentCommands {
     List,
     #[command(about = "Add one or more components")]
     Add {
-        name: Vec<String>,
+        #[arg(value_enum)]
+        name: Vec<SuiComponent>,
         #[arg(long, default_missing_value = "testnet", required = false, num_args=0..=1)]
         network_release: String,
         #[arg(
@@ -76,7 +83,10 @@ pub(crate) enum ComponentCommands {
     #[command(
         about = "Remove one or more components. By default, the binary from each release will be removed."
     )]
-    Remove { binaries: Vec<String> },
+    Remove { 
+        #[arg(value_enum)]
+        binaries: Vec<SuiComponent>
+    },
 }
 
 #[derive(Subcommand)]
@@ -100,4 +110,32 @@ pub(crate) enum DefaultCommands {
         )]
         debug: bool,
     },
+}
+
+#[derive(Clone, ValueEnum)]
+pub(crate) enum SuiComponent {
+    Sui,
+    #[value(name = "sui-bridge")]
+    SuiBridge,
+    #[value(name = "sui-faucet")]
+    SuiFaucet,
+    Walrus,
+}
+
+impl std::fmt::Display for SuiComponent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SuiComponent::Sui => write!(f, "sui"),
+            SuiComponent::SuiBridge => write!(f, "sui-bridge"),
+            SuiComponent::SuiFaucet => write!(f, "sui-faucet"),
+            SuiComponent::Walrus => write!(f, "walrus"),
+        }
+    }
+}
+
+#[derive(Clone, ValueEnum)]
+pub(crate) enum Shell {
+    Bash,
+    Fish,
+    Zsh,
 }

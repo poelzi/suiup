@@ -2,6 +2,7 @@ use clap::Parser;
 use handle_commands::initialize;
 use handle_commands::{
     handle_component, handle_default, handle_override, handle_show, handle_update, handle_which,
+    print_completion_instructions,
 };
 
 use anyhow::anyhow;
@@ -14,6 +15,9 @@ use commands::{Commands, ComponentCommands, Suiup};
 
 use std::env;
 use std::path::PathBuf;
+use clap::CommandFactory;
+use std::io;
+use crate::commands::Shell;
 
 const GITHUB_REPO: &str = "MystenLabs/sui";
 const RELEASES_ARCHIVES_FOLDER: &str = "releases";
@@ -166,6 +170,16 @@ async fn main() -> Result<(), Error> {
         Commands::Show => handle_show()?,
         Commands::Update { name } => handle_update(name).await?,
         Commands::Which => handle_which()?,
+        Commands::Completion { shell } => {
+            let mut cmd = Suiup::command();
+            let shell_type = match shell {
+                Shell::Bash => clap_complete::Shell::Bash,
+                Shell::Fish => clap_complete::Shell::Fish,
+                Shell::Zsh => clap_complete::Shell::Zsh,
+            };
+            clap_complete::generate(shell_type, &mut cmd, "suiup", &mut io::stdout());
+            print_completion_instructions(&shell);
+        }
     }
     Ok(())
 }
