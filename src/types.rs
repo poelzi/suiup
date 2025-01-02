@@ -46,7 +46,6 @@ impl Display for Binaries {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let mut s: HashMap<String, Vec<(String, String, bool)>> = HashMap::new();
 
-        println!("self: {:?}", self.binaries);
         for b in self.binaries.clone() {
             if let Some(binaries) = s.get_mut(&b.network_release) {
                 binaries.push((b.binary_name, b.version, b.debug));
@@ -133,6 +132,7 @@ impl InstalledBinaries {
     pub(crate) fn new() -> Result<Self, Error> {
         Self::read_from_file()
     }
+
     pub(crate) fn save_to_file(&self) -> Result<(), Error> {
         let s = serde_json::to_string_pretty(self)
             .map_err(|_| anyhow!("Cannot read the installed binaries file"))?;
@@ -140,6 +140,7 @@ impl InstalledBinaries {
             .map_err(|_| anyhow!("Cannot serialize the installed binaries to file"))?;
         Ok(())
     }
+
     pub(crate) fn read_from_file() -> Result<Self, Error> {
         let s = std::fs::read_to_string(installed_binaries_file()?)
             .map_err(|_| anyhow!("Cannot read from the installed binaries file"))?;

@@ -11,13 +11,13 @@ use anyhow::Error;
 mod commands;
 mod handle_commands;
 mod types;
+mod walrus;
+mod mvr;
 use commands::{Commands, ComponentCommands, Suiup};
 
+use clap::CommandFactory;
 use std::env;
 use std::path::PathBuf;
-use clap::CommandFactory;
-use std::io;
-use crate::commands::Shell;
 
 const GITHUB_REPO: &str = "MystenLabs/sui";
 const RELEASES_ARCHIVES_FOLDER: &str = "releases";
@@ -28,7 +28,8 @@ fn get_data_home() -> PathBuf {
         env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
-                let mut home = PathBuf::from(env::var_os("USERPROFILE").expect("USERPROFILE not set"));
+                let mut home =
+                    PathBuf::from(env::var_os("USERPROFILE").expect("USERPROFILE not set"));
                 home.push("AppData");
                 home.push("Local");
                 home
@@ -54,7 +55,8 @@ fn get_config_home() -> PathBuf {
         env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
-                let mut home = PathBuf::from(env::var_os("USERPROFILE").expect("USERPROFILE not set"));
+                let mut home =
+                    PathBuf::from(env::var_os("USERPROFILE").expect("USERPROFILE not set"));
                 home.push("AppData");
                 home.push("Local");
                 home
@@ -76,15 +78,13 @@ fn get_config_home() -> PathBuf {
 fn get_cache_home() -> PathBuf {
     #[cfg(windows)]
     {
-        env::var_os("TEMP")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                let mut home = PathBuf::from(env::var_os("USERPROFILE").expect("USERPROFILE not set"));
-                home.push("AppData");
-                home.push("Local");
-                home.push("Temp");
-                home
-            })
+        env::var_os("TEMP").map(PathBuf::from).unwrap_or_else(|| {
+            let mut home = PathBuf::from(env::var_os("USERPROFILE").expect("USERPROFILE not set"));
+            home.push("AppData");
+            home.push("Local");
+            home.push("Temp");
+            home
+        })
     }
 
     #[cfg(not(windows))]
@@ -120,10 +120,7 @@ fn get_suiup_cache_dir() -> PathBuf {
 fn get_default_bin_dir() -> PathBuf {
     #[cfg(windows)]
     {
-        let mut path = PathBuf::from(
-            env::var_os("LOCALAPPDATA")
-                .expect("LOCALAPPDATA not set"),
-        );
+        let mut path = PathBuf::from(env::var_os("LOCALAPPDATA").expect("LOCALAPPDATA not set"));
         path.push(".local");
         path.push("bin");
         path
@@ -153,15 +150,11 @@ async fn main() -> Result<(), Error> {
         Commands::Component(cmd) => handle_component(cmd).await.map_err(|e| anyhow!("{e}"))?,
         Commands::Default(cmd) => handle_default(cmd)?,
         Commands::Install {
-            name,
-            network_release,
-            version,
+            components,
             nightly,
         } => {
             handle_component(ComponentCommands::Add {
-                name,
-                network_release: network_release.unwrap_or_else(|| "testnet".to_string()),
-                version,
+                components,
                 debug: false,
                 nightly,
             })
@@ -172,13 +165,15 @@ async fn main() -> Result<(), Error> {
         Commands::Which => handle_which()?,
         Commands::Completion { shell } => {
             let mut cmd = Suiup::command();
-            let shell_type = match shell {
-                Shell::Bash => clap_complete::Shell::Bash,
-                Shell::Fish => clap_complete::Shell::Fish,
-                Shell::Zsh => clap_complete::Shell::Zsh,
-            };
-            clap_complete::generate(shell_type, &mut cmd, "suiup", &mut io::stdout());
-            print_completion_instructions(&shell);
+            // Generate to string first to validate the output
+            let mut buf = Vec::new();
+            clap_complete::generate(shell, &mut cmd, "suiup", &mut buf);
+
+            // Print to stdout if generation was successful
+            if let Ok(s) = String::from_utf8(buf) {
+                print!("{}", s);
+            }
+            // print_completion_instructions(&shell);
         }
     }
     Ok(())

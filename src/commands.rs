@@ -14,22 +14,17 @@ pub(crate) enum Commands {
     Component(ComponentCommands),
     #[command(subcommand, about = "Get or set the default Sui components' version")]
     Default(DefaultCommands),
-    #[command(about = "Install one or more components. Shortcut of `suiup component add`")]
+    #[command(about = "Install one or more components")]
     Install {
-        #[arg(value_enum)]
-        name: Vec<SuiComponent>,
-        #[arg(long, required=false, default_missing_value = "testnet", num_args=0..=1)]
-        network_release: Option<String>,
         #[arg(
-            long,
-            help = "Version of the component to install. If not provided, the latest version will be installed."
+            value_parser = parse_component_with_version,
+            help = "Component to install with optional version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
         )]
-        version: Option<String>,
+        components: Vec<(SuiComponent, Option<String>)>,
         #[arg(
             long,
             required = false,
             value_name = "branch",
-            conflicts_with_all = &["version", "network_release"],
             default_missing_value = "main",
             num_args = 0..=1,
             help = "Install from a branch. If none provided, main is used. Note that this requires Rust & cargo to be installed."
@@ -45,7 +40,7 @@ pub(crate) enum Commands {
     #[command(about = "Generate shell completion scripts")]
     Completion {
         #[arg(value_enum)]
-        shell: Shell,
+        shell: clap_complete::Shell,
     },
 }
 
@@ -55,15 +50,11 @@ pub(crate) enum ComponentCommands {
     List,
     #[command(about = "Add one or more components")]
     Add {
-        #[arg(value_enum)]
-        name: Vec<SuiComponent>,
-        #[arg(long, default_missing_value = "testnet", required = false, num_args=0..=1)]
-        network_release: String,
         #[arg(
-            long,
-            help = "Version of the component to install. If not provided, the latest version will be installed."
+            value_parser = parse_component_with_version,
+            help = "Component to install with optional version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
         )]
-        version: Option<String>,
+        components: Vec<(SuiComponent, Option<String>)>,
         #[arg(
             long,
             help = "Whether to install the debug version of the component (only available for sui). Default is false."
@@ -73,7 +64,6 @@ pub(crate) enum ComponentCommands {
             long,
             required = false,
             value_name = "branch",
-            conflicts_with_all = &["version", "network_release"],
             default_missing_value = "main",
             num_args = 0..=1,
             help = "Install from a branch. If none provided, main is used. Note that this requires Rust & cargo to be installed."
@@ -83,9 +73,9 @@ pub(crate) enum ComponentCommands {
     #[command(
         about = "Remove one or more components. By default, the binary from each release will be removed."
     )]
-    Remove { 
+    Remove {
         #[arg(value_enum)]
-        binaries: Vec<SuiComponent>
+        binaries: Vec<SuiComponent>,
     },
 }
 
@@ -99,10 +89,7 @@ pub(crate) enum DefaultCommands {
         name: String,
         #[arg(long, required=false, default_missing_value = "testnet", num_args=0..=1)]
         network_release: Option<String>,
-        #[arg(
-            long,
-            help = "Version of the component to set to default."
-        )]
+        #[arg(long, help = "Version of the component to set to default.")]
         version: Option<String>,
         #[arg(
             long,
@@ -113,13 +100,18 @@ pub(crate) enum DefaultCommands {
 }
 
 #[derive(Clone, ValueEnum)]
+#[value(rename_all = "lowercase")]
 pub(crate) enum SuiComponent {
+    #[value(name = "sui")]
     Sui,
     #[value(name = "sui-bridge")]
     SuiBridge,
     #[value(name = "sui-faucet")]
     SuiFaucet,
+    #[value(name = "walrus")]
     Walrus,
+    #[value(name = "mvr")]
+    Mvr,
 }
 
 impl std::fmt::Display for SuiComponent {
@@ -129,13 +121,39 @@ impl std::fmt::Display for SuiComponent {
             SuiComponent::SuiBridge => write!(f, "sui-bridge"),
             SuiComponent::SuiFaucet => write!(f, "sui-faucet"),
             SuiComponent::Walrus => write!(f, "walrus"),
+            SuiComponent::Mvr => write!(f, "mvr"),
         }
     }
 }
 
-#[derive(Clone, ValueEnum)]
-pub(crate) enum Shell {
-    Bash,
-    Fish,
-    Zsh,
+fn parse_component_with_version(s: &str) -> Result<(SuiComponent, Option<String>), String> {
+    let parts: Vec<&str> = s.split_whitespace().collect();
+    match parts.len() {
+        1 => {
+            let component = SuiComponent::from_str(parts[0], true)
+                .map_err(|_| format!("Invalid component name: {}", parts[0]))?;
+            Ok((component, None))
+        }
+        2 => {
+            let component = SuiComponent::from_str(parts[0], true)
+                .map_err(|_| format!("Invalid component name: {}", parts[0]))?;
+            Ok((component, Some(parts[1].to_string())))
+        }
+        _ => Err("Invalid format. Use 'component' or 'component version'".to_string()),
+    }
+}
+
+impl std::str::FromStr for SuiComponent {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "sui" => Ok(SuiComponent::Sui),
+            "sui-bridge" => Ok(SuiComponent::SuiBridge),
+            "sui-faucet" => Ok(SuiComponent::SuiFaucet),
+            "walrus" => Ok(SuiComponent::Walrus),
+            "mvr" => Ok(SuiComponent::Mvr),
+            _ => Err(format!("Unknown component: {}", s)),
+        }
+    }
 }

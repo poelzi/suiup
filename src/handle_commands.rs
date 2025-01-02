@@ -28,26 +28,177 @@ use tar::Archive;
 
 use crate::commands::ComponentCommands;
 use crate::commands::DefaultCommands;
+use crate::commands::SuiComponent;
+use crate::mvr;
 use crate::types::Binaries;
 use crate::types::BinaryVersion;
 use crate::types::InstalledBinaries;
 use crate::types::Network;
 use crate::types::Release;
 use crate::types::Version;
-use crate::Shell;
+use crate::walrus;
 use crate::{
-    get_config_file, get_default_bin_dir,
-    get_suiup_cache_dir, get_suiup_config_dir, get_suiup_data_dir, GITHUB_REPO,
-    RELEASES_ARCHIVES_FOLDER,
+    get_config_file, get_default_bin_dir, get_suiup_cache_dir, get_suiup_config_dir,
+    get_suiup_data_dir, GITHUB_REPO, RELEASES_ARCHIVES_FOLDER,
 };
+use clap_complete::Shell;
 use std::cmp::min;
 use std::env;
-use crate::commands::SuiComponent;
 
 fn available_components() -> &'static [&'static str] {
-    &["sui", "sui-bridge", "sui-faucet", "walrus"]
+    &["sui", "sui-bridge", "sui-faucet", "walrus", "mvr"]
 }
 
+// New helper functions
+fn install_binary(
+    name: &str,
+    network: String,
+    version: &str,
+    debug: bool,
+    binary_path: PathBuf,
+) -> Result<(), Error> {
+    let mut installed_binaries = InstalledBinaries::new()?;
+    installed_binaries.add_binary(BinaryVersion {
+        binary_name: name.to_string(),
+        network_release: network.clone(),
+        version: version.to_string(),
+        debug,
+        path: Some(binary_path.to_string_lossy().to_string()),
+    });
+    installed_binaries.save_to_file()?;
+    update_after_install(&vec![name.to_string()], network, version, debug)?;
+    Ok(())
+}
+
+async fn install_from_release(
+    name: &str,
+    network: &str,
+    version_spec: Option<String>,
+    debug: bool,
+) -> Result<(), Error> {
+    let filename = match version_spec {
+        Some(version) => download_release_at_version(network, &version).await?,
+        None => download_latest_release(network).await?,
+    };
+
+    let version = extract_version_from_release(&filename)?;
+    let binary_name = if debug && name == "sui" {
+        format!("{}-debug", name)
+    } else {
+        name.to_string()
+    };
+
+    if !check_if_binaries_exist(&binary_name, network.to_string(), &version)? {
+        println!("Adding component: {name}-{version}");
+        extract_component(&binary_name, network.to_string(), &filename)?;
+
+        let binary_filename = format!("{}-{}", name, version);
+        #[cfg(target_os = "windows")]
+        let binary_filename = format!("{}.exe", binary_filename);
+
+        let binary_path = binaries_folder()?.join(network).join(binary_filename);
+        install_binary(name, network.to_string(), &version, debug, binary_path)?;
+    } else {
+        println!("Component {name}-{version} already installed");
+    }
+    Ok(())
+}
+
+async fn install_from_nightly(name: &str, branch: &str, debug: bool) -> Result<(), Error> {
+    println!("Installing {name} from {branch} branch");
+    check_cargo_rust_installed()?;
+
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(
+        ProgressStyle::with_template("{spinner:.green} {msg}")
+            .unwrap()
+            .tick_strings(&["-", "\\", "|", "/"]),
+    );
+    pb.enable_steady_tick(Duration::from_millis(100));
+    pb.set_message("Compiling...please wait");
+
+    let cmd = Command::new("cargo")
+        .args(&[
+            "install",
+            "--locked",
+            "--git",
+            "https://github.com/MystenLabs/sui",
+            "--branch",
+            branch,
+            name,
+            "--path",
+            binaries_folder()?.join(branch).to_str().unwrap(),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let output = cmd.wait_with_output()?;
+    pb.finish_with_message("Done!");
+
+    if !output.status.success() {
+        let error_message = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow!("Error during installation:\n{}", error_message));
+    }
+
+    println!("Installation completed successfully!");
+    let binary_path = binaries_folder()?.join(branch).join(name);
+    install_binary(name, branch.to_string(), "nightly", debug, binary_path)?;
+
+    Ok(())
+}
+
+async fn install_walrus(network: String) -> Result<(), Error> {
+    if !check_if_binaries_exist("walrus", network.clone(), "latest")? {
+        println!("Adding component: walrus-latest");
+        let arch = walrus::detect_arch().ok_or_else(|| anyhow!("Unsupported OS"))?;
+        let download_dir = binaries_folder()?.join(network.clone());
+        let installer = walrus::WalrusInstaller::new(arch, &download_dir);
+        installer.download().await?;
+
+        let filename = format!("walrus");
+        #[cfg(target_os = "windows")]
+        let filename = format!("{}.exe", filename);
+
+        install_binary("walrus", network, "latest", false, binaries_folder()?)?;
+    } else {
+        println!("Component walrus-latest already installed");
+    }
+    Ok(())
+}
+
+async fn install_mvr(version_spec: Option<String>) -> Result<(), Error> {
+    let binaries_folder = binaries_folder()?.join("standalone");
+
+    let installer = mvr::MvrInstaller::new(binaries_folder.clone());
+
+    let version = match version_spec {
+        Some(v) => Some(v.trim_start_matches('v').to_string()),
+        None => None,
+    };
+
+    installer.download_version(version.clone()).await?;
+
+    // Get the actual version that was installed
+    let installed_version = if let Some(v) = version {
+        v
+    } else {
+        installer.get_latest_version().await?
+    };
+
+    let binary_path = get_default_bin_dir().join(mvr::MvrInstaller::get_binary_name());
+    install_binary(
+        "mvr",
+        "standalone".to_string(),
+        &installed_version,
+        false,
+        binary_path,
+    )?;
+
+    Ok(())
+}
+
+// Main component handling function
 pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error> {
     match cmd {
         ComponentCommands::List => {
@@ -58,123 +209,49 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             }
         }
         ComponentCommands::Add {
-            name,
-            network_release: network,
-            version,
+            components,
             debug,
             nightly,
         } => {
-            if name.is_empty() {
+            if components.is_empty() {
                 print!("No components provided. Use `suiup component list` to see available components.");
                 return Ok(());
             }
 
-            // Convert SuiComponent to string for further processing
-            let name: Vec<String> = name.into_iter().map(|c| c.to_string()).collect();
+            // Ensure installation directories exist
+            let bin_dir = get_default_bin_dir();
+            std::fs::create_dir_all(&bin_dir)?;
 
-            let available_components = available_components();
-            for c in &name {
-                if !available_components.contains(&c.as_str()) {
-                    println!("Component {} does not exist", c);
+            let binaries_dir = binaries_folder()?;
+            std::fs::create_dir_all(&binaries_dir)?;
+
+            for (component, version_spec) in components {
+                let name = component.to_string();
+                let available_components = available_components();
+                if !available_components.contains(&name.as_str()) {
+                    println!("Component {} does not exist", name);
                     return Ok(());
                 }
-            }
 
-            if let Some(nightly) = nightly.clone() {
-                let bins = name.join(" ");
-                println!("Installing {bins} from {nightly} branch");
-                check_cargo_rust_installed()?;
-                let pb = ProgressBar::new_spinner();
-                pb.set_style(
-                    ProgressStyle::with_template("{spinner:.green} {msg}")
-                        .unwrap()
-                        .tick_strings(&["-", "\\", "|", "/"]),
-                ); // Custom spinner style
-                pb.enable_steady_tick(Duration::from_millis(100)); // Update every 100 ms
-
-                // Set an initial message
-                pb.set_message("Compiling...please wait");
-                let cmd = Command::new("cargo")
-                    .args(&[
-                        "install",
-                        "--locked",
-                        "--git",
-                        "https://github.com/MystenLabs/sui",
-                        "--branch",
-                        &nightly,
-                        &bins,
-                        "--path",
-                        binaries_folder()?.join(&nightly).to_str().unwrap(),
-                    ])
-                    .stdout(Stdio::null()) // Suppress standard output on all platforms
-                    .stderr(Stdio::piped()) // Capture standard error
-                    .spawn()?;
-
-                // Wait for the command to finish
-                let output = cmd.wait_with_output()?;
-                pb.finish_with_message("Done!");
-                if output.status.success() {
-                    println!("Installation completed successfully!");
-                } else {
-                    let error_message = String::from_utf8_lossy(&output.stderr);
-                    eprintln!("Error during installation:\n{}", error_message);
-                }
-                let mut installed_binaries = InstalledBinaries::new()?;
-                for binary in &name {
-                    let binary_path = binaries_folder()?.join(nightly.clone()).join(&binary);
-                    installed_binaries.add_binary(BinaryVersion {
-                        binary_name: binary.to_string(),
-                        network_release: nightly.clone(),
-                        version: "nightly".to_string(),
-                        path: Some(binary_path.to_string_lossy().to_string()),
-                        debug,
-                    });
-                }
-                installed_binaries.save_to_file()?;
-                update_after_install(&name, nightly.clone(), "nightly", debug)?;
-
-                return Ok(());
-            }
-
-            let filename = if let Some(version) = version {
-                download_release_at_version(&network, &version).await?
-            } else {
-                download_latest_release(&network.to_string())
-                    .await
-                    .map_err(|_| anyhow!("Could not download latest release"))?
-            };
-            let version = extract_version_from_release(&filename)?;
-            let mut installed_binaries = InstalledBinaries::new()?;
-            for binary in &name {
-                let binary_for_debug = if debug == true && binary == "sui" {
-                    format!("{}-debug", binary)
-                } else {
-                    binary.to_string()
-                };
-                if !check_if_binaries_exist(&binary_for_debug, network.clone(), &version)? {
-                    println!("Adding component: {binary}-{version}");
-                    extract_component(&binary_for_debug, network.clone(), &filename)
-                        .map_err(|_| anyhow!("Could not extract component"))?;
-                    let filename = format!("{}-{}", binary, version);
-                    #[cfg(target_os = "windows")]
-                    {
-                        let filename = format!("{}.exe", filename);
+                match (name.as_str(), &nightly) {
+                    ("walrus", _) => {
+                        let (network, _) = parse_version_spec(version_spec)?;
+                        std::fs::create_dir_all(&binaries_dir.join(network.clone()))?;
+                        install_walrus(network).await?;
                     }
-                    let binary_path = binaries_folder()?.join(network.to_string()).join(filename);
-                    println!("{:?}", binary_path.display());
-                    installed_binaries.add_binary(BinaryVersion {
-                        binary_name: binary.to_string(),
-                        network_release: network.clone(),
-                        version: version.clone(),
-                        debug,
-                        path: Some(binary_path.to_string_lossy().to_string()),
-                    });
-                } else {
-                    println!("Component {binary}-{version} already installed");
+                    ("mvr", _) => {
+                        std::fs::create_dir_all(&binaries_dir.join("standalone"))?;
+                        install_mvr(version_spec).await?;
+                    }
+                    (_, Some(branch)) => {
+                        install_from_nightly(&name, branch, debug).await?;
+                    }
+                    _ => {
+                        let (network, version) = parse_version_spec(version_spec)?;
+                        install_from_release(&name, &network, version, debug).await?;
+                    }
                 }
             }
-            installed_binaries.save_to_file()?;
-            update_after_install(&name, network.clone(), &version, debug)?;
         }
         ComponentCommands::Remove { binaries } => {
             let binaries: Vec<String> = binaries.into_iter().map(|c| c.to_string()).collect();
@@ -264,7 +341,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             debug,
         } => {
             let network = network_release.unwrap_or_else(|| "testnet".to_string());
-            
+
             // a map of network --> to BinaryVersion
             let installed_binaries = installed_binaries_grouped_by_network(None)?;
             let binaries = installed_binaries
@@ -272,9 +349,9 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                 .ok_or_else(|| anyhow!("No binaries installed for {network}"))?;
 
             // Check if the binary exists in any network
-            let binary_exists = installed_binaries.values().any(|bins| {
-                bins.iter().any(|x| x.binary_name == name)
-            });
+            let binary_exists = installed_binaries
+                .values()
+                .any(|bins| bins.iter().any(|x| x.binary_name == name));
             if !binary_exists {
                 bail!("Binary {name} not found in installed binaries. Use `suiup show` to see installed binaries.");
             }
@@ -424,17 +501,15 @@ pub async fn handle_update(binary_name: String) -> Result<(), Error> {
         }
     }
 
-    for (n, v) in to_update.iter() {
-        println!("Updating {binary_name} to {v} from {n} release");
-        handle_component(ComponentCommands::Add {
-            name: vec![component.clone()],
-            network_release: n.to_string(),
-            version: Some(v.clone()),
-            debug: false,
-            nightly: None,
-        })
-        .await?;
-    }
+    // for (n, v) in to_update.iter() {
+    //     println!("Updating {binary_name} to {v} from {n} release");
+    //     handle_component(ComponentCommands::Add {
+    //         components: vec![component.clone()],
+    //         debug: false,
+    //         nightly: None,
+    //     })
+    //     .await?;
+    // }
 
     Ok(())
 }
@@ -830,11 +905,15 @@ fn update_after_install(
     match input.as_str() {
         "y" | "yes" => {
             for binary in name {
-                let filename = if debug {
+                let mut filename = if debug {
                     format!("{}-debug-{}", binary, version)
                 } else {
                     format!("{}-{}", binary, version)
                 };
+
+                if version.is_empty() {
+                    filename = filename.strip_suffix('-').unwrap_or_default().to_string();
+                }
 
                 #[cfg(target_os = "windows")]
                 {
@@ -1030,7 +1109,7 @@ fn check_cargo_rust_installed() -> Result<(), Error> {
 
 fn check_path_and_warn() -> Result<(), Error> {
     let local_bin = get_default_bin_dir();
-    
+
     // Check if the bin directory exists in PATH
     if let Ok(path) = env::var("PATH") {
         #[cfg(windows)]
@@ -1038,7 +1117,10 @@ fn check_path_and_warn() -> Result<(), Error> {
         #[cfg(not(windows))]
         let path_separator = ':';
 
-        if !path.split(path_separator).any(|p| PathBuf::from(p) == local_bin) {
+        if !path
+            .split(path_separator)
+            .any(|p| PathBuf::from(p) == local_bin)
+        {
             println!("\nWARNING: {} is not in your PATH", local_bin.display());
 
             #[cfg(windows)]
@@ -1080,7 +1162,9 @@ pub(crate) fn print_completion_instructions(shell: &Shell) {
             println!("1. Create completion directory if it doesn't exist:");
             println!("    mkdir -p ~/.local/share/bash-completion/completions");
             println!("2. Add completions to the directory:");
-            println!("    suiup completion bash > ~/.local/share/bash-completion/completions/suiup");
+            println!(
+                "    suiup completion bash > ~/.local/share/bash-completion/completions/suiup"
+            );
             println!("\nMake sure you have bash-completion installed and loaded in your ~/.bashrc");
         }
         Shell::Fish => {
@@ -1099,6 +1183,27 @@ pub(crate) fn print_completion_instructions(shell: &Shell) {
             println!("3. Add the following to your ~/.zshrc:");
             println!("    fpath=(~/.zsh/completions $fpath)");
             println!("    autoload -U compinit; compinit");
+        }
+        _ => {}
+    }
+}
+
+fn parse_version_spec(spec: Option<String>) -> Result<(String, Option<String>), Error> {
+    match spec {
+        None => Ok(("testnet".to_string(), None)),
+        Some(spec) => {
+            if spec.starts_with("testnet-")
+                || spec.starts_with("devnet-")
+                || spec.starts_with("mainnet-")
+            {
+                let parts: Vec<&str> = spec.splitn(2, '-').collect();
+                Ok((parts[0].to_string(), Some(parts[1].to_string())))
+            } else if spec == "testnet" || spec == "devnet" || spec == "mainnet" {
+                Ok((spec, None))
+            } else {
+                // Assume it's a version for testnet
+                Ok(("testnet".to_string(), Some(spec)))
+            }
         }
     }
 }
