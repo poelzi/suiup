@@ -26,6 +26,7 @@ use std::time::Duration;
 use std::time::Instant;
 use tar::Archive;
 
+use crate::commands::parse_component_with_version;
 use crate::commands::ComponentCommands;
 use crate::commands::DefaultCommands;
 use crate::commands::SuiComponent;
@@ -56,6 +57,7 @@ fn install_binary(
     version: &str,
     debug: bool,
     binary_path: PathBuf,
+    yes: bool,
 ) -> Result<(), Error> {
     let mut installed_binaries = InstalledBinaries::new()?;
     installed_binaries.add_binary(BinaryVersion {
@@ -66,7 +68,7 @@ fn install_binary(
         path: Some(binary_path.to_string_lossy().to_string()),
     });
     installed_binaries.save_to_file()?;
-    update_after_install(&vec![name.to_string()], network, version, debug)?;
+    update_after_install(&vec![name.to_string()], network, version, debug, yes)?;
     Ok(())
 }
 
@@ -75,6 +77,7 @@ async fn install_from_release(
     network: &str,
     version_spec: Option<String>,
     debug: bool,
+    yes: bool,
 ) -> Result<(), Error> {
     let filename = match version_spec {
         Some(version) => download_release_at_version(network, &version).await?,
@@ -97,14 +100,19 @@ async fn install_from_release(
         let binary_filename = format!("{}.exe", binary_filename);
 
         let binary_path = binaries_folder()?.join(network).join(binary_filename);
-        install_binary(name, network.to_string(), &version, debug, binary_path)?;
+        install_binary(name, network.to_string(), &version, debug, binary_path, yes)?;
     } else {
         println!("Component {name}-{version} already installed");
     }
     Ok(())
 }
 
-async fn install_from_nightly(name: &str, branch: &str, debug: bool) -> Result<(), Error> {
+async fn install_from_nightly(
+    name: &str,
+    branch: &str,
+    debug: bool,
+    yes: bool,
+) -> Result<(), Error> {
     println!("Installing {name} from {branch} branch");
     check_cargo_rust_installed()?;
 
@@ -143,12 +151,12 @@ async fn install_from_nightly(name: &str, branch: &str, debug: bool) -> Result<(
 
     println!("Installation completed successfully!");
     let binary_path = binaries_folder()?.join(branch).join(name);
-    install_binary(name, branch.to_string(), "nightly", debug, binary_path)?;
+    install_binary(name, branch.to_string(), "nightly", debug, binary_path, yes)?;
 
     Ok(())
 }
 
-async fn install_walrus(network: String) -> Result<(), Error> {
+async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
     if !check_if_binaries_exist("walrus", network.clone(), "latest")? {
         println!("Adding component: walrus-latest");
         let arch = walrus::detect_arch().ok_or_else(|| anyhow!("Unsupported OS"))?;
@@ -160,14 +168,14 @@ async fn install_walrus(network: String) -> Result<(), Error> {
         #[cfg(target_os = "windows")]
         let filename = format!("{}.exe", filename);
 
-        install_binary("walrus", network, "latest", false, binaries_folder()?)?;
+        install_binary("walrus", network, "latest", false, binaries_folder()?, yes)?;
     } else {
         println!("Component walrus-latest already installed");
     }
     Ok(())
 }
 
-async fn install_mvr(version_spec: Option<String>) -> Result<(), Error> {
+async fn install_mvr(version_spec: Option<String>, yes: bool) -> Result<(), Error> {
     let binaries_folder = binaries_folder()?.join("standalone");
 
     let installer = mvr::MvrInstaller::new(binaries_folder.clone());
@@ -193,6 +201,7 @@ async fn install_mvr(version_spec: Option<String>) -> Result<(), Error> {
         &installed_version,
         false,
         binary_path,
+        yes,
     )?;
 
     Ok(())
@@ -212,6 +221,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             components,
             debug,
             nightly,
+            yes,
         } => {
             if components.is_empty() {
                 print!("No components provided. Use `suiup component list` to see available components.");
@@ -225,31 +235,34 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             let binaries_dir = binaries_folder()?;
             std::fs::create_dir_all(&binaries_dir)?;
 
-            for (component, version_spec) in components {
-                let name = component.to_string();
-                let available_components = available_components();
-                if !available_components.contains(&name.as_str()) {
-                    println!("Component {} does not exist", name);
-                    return Ok(());
-                }
+            let components = components.join(" ");
+            let (component, version_spec) =
+                parse_component_with_version(&components).map_err(|e| anyhow!("{e}"))?;
 
-                match (name.as_str(), &nightly) {
-                    ("walrus", _) => {
-                        let (network, _) = parse_version_spec(version_spec)?;
-                        std::fs::create_dir_all(&binaries_dir.join(network.clone()))?;
-                        install_walrus(network).await?;
-                    }
-                    ("mvr", _) => {
-                        std::fs::create_dir_all(&binaries_dir.join("standalone"))?;
-                        install_mvr(version_spec).await?;
-                    }
-                    (_, Some(branch)) => {
-                        install_from_nightly(&name, branch, debug).await?;
-                    }
-                    _ => {
-                        let (network, version) = parse_version_spec(version_spec)?;
-                        install_from_release(&name, &network, version, debug).await?;
-                    }
+            let name = component.to_string();
+            let available_components = available_components();
+            if !available_components.contains(&name.as_str()) {
+                println!("Component {} does not exist", name);
+                return Ok(());
+            }
+
+            match (name.as_str(), &nightly) {
+                ("walrus", _) => {
+                    let (network, _) = parse_version_spec(version_spec)?;
+                    std::fs::create_dir_all(&binaries_dir.join(network.clone()))?;
+                    install_walrus(network, yes).await?;
+                }
+                ("mvr", _) => {
+                    std::fs::create_dir_all(&binaries_dir.join("standalone"))?;
+                    install_mvr(version_spec, yes).await?;
+                }
+                (_, Some(branch)) => {
+                    install_from_nightly(&name, branch, debug, yes).await?;
+                }
+                _ => {
+                    let (network, version) = parse_version_spec(version_spec)?;
+                    println!("{name} {network} {:?}", version);
+                    install_from_release(&name, &network, version, debug, yes).await?;
                 }
             }
         }
@@ -512,12 +525,6 @@ pub async fn handle_update(binary_name: String) -> Result<(), Error> {
     // }
 
     Ok(())
-}
-
-/// Handles the `override` command
-pub fn handle_override() {
-    println!("Overriding project’s CLI version...");
-    // Implement the override logic here
 }
 
 /// Handles the `which` command
@@ -884,22 +891,27 @@ fn update_after_install(
     network: String,
     version: &str,
     debug: bool,
+    yes: bool,
 ) -> Result<(), Error> {
-    let prompt = "Do you want to set this new installed version as the default one? [y/N] ";
+    let input = if yes {
+        "y".to_string()
+    } else {
+        let prompt = "Do you want to set this new installed version as the default one? [y/N] ";
 
-    print!("{prompt}");
-    std::io::stdout().flush().unwrap();
+        print!("{prompt}");
+        std::io::stdout().flush().unwrap();
 
-    // Create a mutable String to store the input
-    let mut input = String::new();
+        // Create a mutable String to store the input
+        let mut input = String::new();
 
-    // Read the input from the console
-    std::io::stdin()
-        .read_line(&mut input)
-        .expect("Failed to read line");
+        // Read the input from the console
+        std::io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read line");
 
-    // Trim the input and convert to lowercase for comparison
-    let input = input.trim().to_lowercase();
+        // Trim the input and convert to lowercase for comparison
+        input.trim().to_lowercase()
+    };
 
     // Check the user's response
     match input.as_str() {
@@ -953,7 +965,7 @@ fn update_after_install(
         }
         _ => {
             println!("Invalid input. Please enter 'y' or 'n'.");
-            update_after_install(name, network, version, debug)?;
+            update_after_install(name, network, version, debug, yes)?;
         }
     }
     Ok(())

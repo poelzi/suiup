@@ -17,10 +17,10 @@ pub(crate) enum Commands {
     #[command(about = "Install one or more components")]
     Install {
         #[arg(
-            value_parser = parse_component_with_version,
+            num_args = 1..=2,
             help = "Component to install with optional version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
         )]
-        components: Vec<(SuiComponent, Option<String>)>,
+        components: Vec<String>,
         #[arg(
             long,
             required = false,
@@ -30,6 +30,8 @@ pub(crate) enum Commands {
             help = "Install from a branch. If none provided, main is used. Note that this requires Rust & cargo to be installed."
         )]
         nightly: Option<String>,
+        #[arg(short, long, help = "Accept defaults without prompting")]
+        yes: bool,
     },
     #[command(about = "Show installed and active Sui binaries")]
     Show,
@@ -51,10 +53,10 @@ pub(crate) enum ComponentCommands {
     #[command(about = "Add one or more components")]
     Add {
         #[arg(
-            value_parser = parse_component_with_version,
+            num_args = 1..=2,
             help = "Component to install with optional version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
         )]
-        components: Vec<(SuiComponent, Option<String>)>,
+        components: Vec<String>,
         #[arg(
             long,
             help = "Whether to install the debug version of the component (only available for sui). Default is false."
@@ -69,6 +71,8 @@ pub(crate) enum ComponentCommands {
             help = "Install from a branch. If none provided, main is used. Note that this requires Rust & cargo to be installed."
         )]
         nightly: Option<String>,
+        #[arg(short, long, help = "Accept defaults without prompting")]
+        yes: bool,
     },
     #[command(
         about = "Remove one or more components. By default, the binary from each release will be removed."
@@ -99,9 +103,9 @@ pub(crate) enum DefaultCommands {
     },
 }
 
-#[derive(Clone, ValueEnum)]
+#[derive(Clone, Debug, PartialEq, ValueEnum)]
 #[value(rename_all = "lowercase")]
-pub(crate) enum SuiComponent {
+pub enum SuiComponent {
     #[value(name = "sui")]
     Sui,
     #[value(name = "sui-bridge")]
@@ -126,8 +130,9 @@ impl std::fmt::Display for SuiComponent {
     }
 }
 
-fn parse_component_with_version(s: &str) -> Result<(SuiComponent, Option<String>), String> {
+pub fn parse_component_with_version(s: &str) -> Result<(SuiComponent, Option<String>), String> {
     let parts: Vec<&str> = s.split_whitespace().collect();
+
     match parts.len() {
         1 => {
             let component = SuiComponent::from_str(parts[0], true)

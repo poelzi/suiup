@@ -1,7 +1,7 @@
 use clap::Parser;
 use handle_commands::initialize;
 use handle_commands::{
-    handle_component, handle_default, handle_override, handle_show, handle_update, handle_which,
+    handle_component, handle_default, handle_show, handle_update, handle_which,
     print_completion_instructions,
 };
 
@@ -10,9 +10,9 @@ use anyhow::Error;
 
 mod commands;
 mod handle_commands;
+mod mvr;
 mod types;
 mod walrus;
-mod mvr;
 use commands::{Commands, ComponentCommands, Suiup};
 
 use clap::CommandFactory;
@@ -152,11 +152,13 @@ async fn main() -> Result<(), Error> {
         Commands::Install {
             components,
             nightly,
+            yes,
         } => {
             handle_component(ComponentCommands::Add {
                 components,
                 debug: false,
                 nightly,
+                yes,
             })
             .await?
         }
