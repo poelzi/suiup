@@ -29,7 +29,6 @@ use tar::Archive;
 use crate::commands::parse_component_with_version;
 use crate::commands::ComponentCommands;
 use crate::commands::DefaultCommands;
-use crate::commands::SuiComponent;
 use crate::mvr;
 use crate::types::Binaries;
 use crate::types::BinaryVersion;
@@ -50,7 +49,6 @@ fn available_components() -> &'static [&'static str] {
     &["sui", "sui-bridge", "sui-faucet", "walrus", "mvr"]
 }
 
-// New helper functions
 fn install_binary(
     name: &str,
     network: String,
@@ -72,6 +70,7 @@ fn install_binary(
     Ok(())
 }
 
+// this is used for sui mostly
 async fn install_from_release(
     name: &str,
     network: &str,
@@ -176,33 +175,26 @@ async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
 }
 
 async fn install_mvr(version_spec: Option<String>, yes: bool) -> Result<(), Error> {
-    let binaries_folder = binaries_folder()?.join("standalone");
+    let version = version_spec.clone().unwrap_or_else(|| "".to_string());
+    if !check_if_binaries_exist("mvr", "standalone".to_string(), &version)? {
+        let installer = mvr::MvrInstaller::new();
+        let version = version_spec.clone();
+        let installed_version = installer.download_version(version.clone()).await?;
 
-    let installer = mvr::MvrInstaller::new(binaries_folder.clone());
+        println!("Adding component: mvr-{installed_version}");
 
-    let version = match version_spec {
-        Some(v) => Some(v.trim_start_matches('v').to_string()),
-        None => None,
-    };
-
-    installer.download_version(version.clone()).await?;
-
-    // Get the actual version that was installed
-    let installed_version = if let Some(v) = version {
-        v
+        let binary_path = default_bin_folder()?;
+        install_binary(
+            "mvr",
+            "standalone".to_string(),
+            &installed_version,
+            false,
+            binary_path,
+            yes,
+        )?;
     } else {
-        installer.get_latest_version().await?
-    };
-
-    let binary_path = get_default_bin_dir().join(mvr::MvrInstaller::get_binary_name());
-    install_binary(
-        "mvr",
-        "standalone".to_string(),
-        &installed_version,
-        false,
-        binary_path,
-        yes,
-    )?;
+        println!("Component mvr-{version} already installed. Use `suiup default set mvr {version}` to set the default version to the specified one.");
+    }
 
     Ok(())
 }
@@ -229,11 +221,11 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             }
 
             // Ensure installation directories exist
-            let bin_dir = get_default_bin_dir();
-            std::fs::create_dir_all(&bin_dir)?;
+            let default_bin_dir = get_default_bin_dir();
+            std::fs::create_dir_all(&default_bin_dir)?;
 
-            let binaries_dir = binaries_folder()?;
-            std::fs::create_dir_all(&binaries_dir)?;
+            let installed_bins_dir = binaries_folder()?;
+            std::fs::create_dir_all(&installed_bins_dir)?;
 
             let components = components.join(" ");
             let (component, version_spec) =
@@ -249,11 +241,11 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             match (name.as_str(), &nightly) {
                 ("walrus", _) => {
                     let (network, _) = parse_version_spec(version_spec)?;
-                    std::fs::create_dir_all(&binaries_dir.join(network.clone()))?;
+                    std::fs::create_dir_all(&installed_bins_dir.join(network.clone()))?;
                     install_walrus(network, yes).await?;
                 }
                 ("mvr", _) => {
-                    std::fs::create_dir_all(&binaries_dir.join("standalone"))?;
+                    std::fs::create_dir_all(&installed_bins_dir.join("standalone"))?;
                     install_mvr(version_spec, yes).await?;
                 }
                 (_, Some(branch)) => {
@@ -261,7 +253,6 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 }
                 _ => {
                     let (network, version) = parse_version_spec(version_spec)?;
-                    println!("{name} {network} {:?}", version);
                     install_from_release(&name, &network, version, debug, yes).await?;
                 }
             }
@@ -460,14 +451,9 @@ pub fn handle_show() -> Result<(), Error> {
 
 /// Handles the `update` command
 pub async fn handle_update(binary_name: String) -> Result<(), Error> {
-    // Convert String to SuiComponent for validation
-    let component = match binary_name.as_str() {
-        "sui" => SuiComponent::Sui,
-        "sui-bridge" => SuiComponent::SuiBridge,
-        "sui-faucet" => SuiComponent::SuiFaucet,
-        "walrus" => SuiComponent::Walrus,
-        _ => bail!("Invalid component name: {}", binary_name),
-    };
+    if !available_components().contains(&binary_name.as_str()) {
+        bail!("Invalid component name: {}", binary_name);
+    }
 
     let installed_binaries = InstalledBinaries::new()?;
     let binaries = installed_binaries.binaries();
@@ -514,15 +500,16 @@ pub async fn handle_update(binary_name: String) -> Result<(), Error> {
         }
     }
 
-    // for (n, v) in to_update.iter() {
-    //     println!("Updating {binary_name} to {v} from {n} release");
-    //     handle_component(ComponentCommands::Add {
-    //         components: vec![component.clone()],
-    //         debug: false,
-    //         nightly: None,
-    //     })
-    //     .await?;
-    // }
+    for (n, v) in to_update.iter() {
+        println!("Updating {binary_name} to {v} from {n} release");
+        handle_component(ComponentCommands::Add {
+            components: vec![binary_name.clone()],
+            debug: false,
+            nightly: None,
+            yes: true,
+        })
+        .await?;
+    }
 
     Ok(())
 }
@@ -720,46 +707,33 @@ async fn download_latest_release(network: &str) -> Result<String, anyhow::Error>
     download_asset_from_github(&last_release, &os, &arch).await
 }
 
-/// Downloads the archived release from GitHub and returns the file name
-/// The `network, os, and arch` parameters are used to retrieve the correct release for the target
-/// architecture and OS
-async fn download_asset_from_github(
-    release: &Release,
-    os: &str,
-    arch: &str,
-) -> Result<String, anyhow::Error> {
-    let asset = release
-        .assets
-        .iter()
-        .find(|&a| a.name.contains(arch) && a.name.contains(os.to_string().to_lowercase().as_str()))
-        .ok_or_else(|| anyhow!("Asset not found for {os}-{arch}"))?;
+pub async fn download_file(url: &str, download_to: &PathBuf, name: &str) -> Result<String, Error> {
+    let client = Client::new();
+    let response = client.get(url).header("User-Agent", "suiup").send().await?;
 
-    let response = Client::new()
-        .get(&asset.browser_download_url)
-        .send()
-        .await?;
-    let total_size = response.content_length().unwrap_or(0);
-    // Find the archive file for the current OS and architecture
+    if !response.status().is_success() {
+        return Err(anyhow!("Failed to download: {}", response.status()));
+    }
 
-    let path = release_archive_folder()?;
-    let mut file_path = path.clone();
-    file_path.push(&asset.name);
-    if file_path.exists() {
-        if file_path.metadata()?.len() == total_size {
-            println!("Found release archive {} in cache", asset.name);
-            return Ok(asset.name.to_string());
+    let total_size = response
+        .content_length()
+        .ok_or_else(|| anyhow!("Failed to get content length"))?;
+    if download_to.exists() {
+        if download_to.metadata()?.len() == total_size {
+            println!("Found {name} in cache");
+            return Ok(name.to_string());
         } else {
-            std::fs::remove_file(&file_path)?;
+            std::fs::remove_file(&download_to)?;
         }
     }
 
     let pb = ProgressBar::new(total_size);
     pb.set_style(ProgressStyle::default_bar()
-        .template("Downloading release: {spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
-        .unwrap()
-        .progress_chars("=>-"));
+            .template("Downloading release: {spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
+            .unwrap()
+            .progress_chars("=>-"));
 
-    let mut file = File::create(file_path)?;
+    let mut file = std::fs::File::create(&download_to)?;
     let mut downloaded: u64 = 0;
     let mut stream = response.bytes_stream();
     let start = Instant::now();
@@ -778,9 +752,68 @@ async fn download_asset_from_github(
         }
     }
 
-    pb.finish_with_message("Download completed");
+    pb.finish_with_message("Download complete");
 
-    Ok(asset.name.to_string())
+    Ok(name.to_string())
+}
+
+/// Downloads the archived release from GitHub and returns the file name
+/// The `network, os, and arch` parameters are used to retrieve the correct release for the target
+/// architecture and OS
+async fn download_asset_from_github(
+    release: &Release,
+    os: &str,
+    arch: &str,
+) -> Result<String, anyhow::Error> {
+    let asset = release
+        .assets
+        .iter()
+        .find(|&a| a.name.contains(arch) && a.name.contains(os.to_string().to_lowercase().as_str()))
+        .ok_or_else(|| anyhow!("Asset not found for {os}-{arch}"))?;
+
+    let url = asset.clone().browser_download_url;
+    let name = asset.clone().name;
+    let path = release_archive_folder()?;
+    let mut file_path = path.clone();
+    file_path.push(&asset.name);
+
+    download_file(&url, &file_path, &name).await
+
+    // let response = Client::new()
+    //     .get(&asset.browser_download_url)
+    //     .send()
+    //     .await?;
+    // let total_size = response.content_length().unwrap_or(0);
+    // // Find the archive file for the current OS and architecture
+    //
+    // let pb = ProgressBar::new(total_size);
+    // pb.set_style(ProgressStyle::default_bar()
+    //     .template("Downloading release: {spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
+    //     .unwrap()
+    //     .progress_chars("=>-"));
+    //
+    // let mut file = File::create(file_path)?;
+    // let mut downloaded: u64 = 0;
+    // let mut stream = response.bytes_stream();
+    // let start = Instant::now();
+    //
+    // while let Some(item) = stream.next().await {
+    //     let chunk = item?;
+    //     file.write_all(&chunk)?;
+    //     let new = min(downloaded + (chunk.len() as u64), total_size);
+    //     downloaded = new;
+    //     pb.set_position(new);
+    //
+    //     let elapsed = start.elapsed().as_secs_f64();
+    //     if elapsed > 0.0 {
+    //         let speed = downloaded as f64 / elapsed;
+    //         pb.set_message(format!("Speed: {}/s", HumanBytes(speed as u64)));
+    //     }
+    // }
+    //
+    // pb.finish_with_message("Download completed");
+
+    // Ok(asset.name.to_string())
 }
 
 /// Extracts a component from the release archive. The component's name is identified by the
@@ -863,7 +896,7 @@ fn default_bin_folder() -> Result<PathBuf, anyhow::Error> {
 
 /// Returns the path to the releases archives folder. The folder is created if it does not exist.
 /// This is used to cache the release archives.
-fn release_archive_folder() -> Result<PathBuf, anyhow::Error> {
+pub fn release_archive_folder() -> Result<PathBuf, anyhow::Error> {
     let mut path = get_suiup_cache_dir();
     path.push(RELEASES_ARCHIVES_FOLDER);
     if !path.is_dir() {
@@ -874,7 +907,7 @@ fn release_archive_folder() -> Result<PathBuf, anyhow::Error> {
 }
 
 /// Returns the path to the binaries folder. The folder is created if it does not exist.
-fn binaries_folder() -> Result<PathBuf, anyhow::Error> {
+pub fn binaries_folder() -> Result<PathBuf, anyhow::Error> {
     let mut path = get_suiup_data_dir();
     path.push("binaries");
     if !path.is_dir() {
@@ -927,32 +960,17 @@ fn update_after_install(
                     filename = filename.strip_suffix('-').unwrap_or_default().to_string();
                 }
 
+                println!("Setting {binary}-{version} as default");
+                println!("{}/{}/{}", binaries_folder()?.display(), network, filename);
+
                 #[cfg(target_os = "windows")]
                 {
                     let filename = format!("{}.exe", filename);
                 }
-                let mut src = binaries_folder()?;
-                src.push(network.to_string());
-                src.push(filename);
+                let src = binaries_folder()?.join(network.to_string()).join(filename);
+                let dst = default_bin_folder()?.join(binary);
 
-                let mut dst = default_bin_folder()?;
-                // Just use the binary name without version for the symlink
-                dst.push(binary);
-
-                // On Unix systems, create a symlink instead of copying
-                #[cfg(not(target_os = "windows"))]
-                {
-                    if dst.exists() {
-                        std::fs::remove_file(&dst)?;
-                    }
-                    std::os::unix::fs::symlink(&src, &dst)?;
-                }
-
-                // On Windows, copy the file
-                #[cfg(target_os = "windows")]
-                {
-                    std::fs::copy(&src, &dst)?;
-                }
+                std::fs::copy(&src, &dst)?;
 
                 println!("[{network}] {binary}-{version} set as default");
             }
@@ -1008,7 +1026,13 @@ fn update_default_version_file(
 fn check_if_binaries_exist(binary: &str, network: String, version: &str) -> Result<bool, Error> {
     let mut path = binaries_folder()?;
     path.push(network.to_string());
-    let binary_version = format!("{}-{}", binary, version);
+
+    let binary_version = if version.is_empty() {
+        format!("{}", binary)
+    } else {
+        format!("{}-{}", binary, version)
+    };
+
     #[cfg(target_os = "windows")]
     {
         path.push(format!("{}.exe", binary_version));

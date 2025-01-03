@@ -1,10 +1,7 @@
+use crate::handle_commands::{binaries_folder, download_file};
 use anyhow::{anyhow, Error};
-use futures_util::StreamExt;
-use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use serde::Deserialize;
-use std::io::Write;
-use std::path::PathBuf;
 
 const MVR_REPO: &str = "MystenLabs/mvr";
 
@@ -20,13 +17,11 @@ pub struct MvrAsset {
     pub browser_download_url: String,
 }
 
-pub struct MvrInstaller {
-    install_dir: PathBuf,
-}
+pub struct MvrInstaller;
 
 impl MvrInstaller {
-    pub fn new(install_dir: PathBuf) -> Self {
-        Self { install_dir }
+    pub fn new() -> Self {
+        Self
     }
 
     pub async fn get_releases(&self) -> Result<Vec<MvrRelease>, Error> {
@@ -48,7 +43,7 @@ impl MvrInstaller {
         let releases = self.get_releases().await?;
         releases
             .first()
-            .map(|r| r.tag_name.trim_start_matches('v').to_string())
+            .map(|r| r.tag_name.clone())
             .ok_or_else(|| anyhow!("No MVR releases found"))
     }
 
@@ -63,7 +58,7 @@ impl MvrInstaller {
         }
     }
 
-    pub fn get_asset_name(&self, version: &str) -> String {
+    pub fn get_asset_name(&self) -> String {
         let (os, arch) = if cfg!(target_os = "macos") {
             if cfg!(target_arch = "x86_64") {
                 ("macos", "x86_64")
@@ -88,75 +83,44 @@ impl MvrInstaller {
         name
     }
 
-    pub async fn download_version(&self, version: Option<String>) -> Result<(), Error> {
+    /// Download the MVR CLI binary, if it does not exist in the binary folder.
+    pub async fn download_version(&self, version: Option<String>) -> Result<String, Error> {
         let version = if let Some(v) = version {
             v
         } else {
             self.get_latest_version().await?
         };
 
+        let cache_folder = binaries_folder()?.join("standalone");
+        if !cache_folder.exists() {
+            std::fs::create_dir_all(&cache_folder)?;
+        }
+        let mvr_binary_path = cache_folder.join(format!("mvr-{}", version));
+        if mvr_binary_path.exists() {
+            println!("MVR v{} already installed. Use `suiup default set mvr {}` to set the default version to the desired one", version, version);
+            return Ok(version);
+        }
+
         let releases = self.get_releases().await?;
         let release = releases
             .iter()
-            .find(|r| r.tag_name == format!("v{}", version))
+            .find(|r| r.tag_name == version)
             .ok_or_else(|| anyhow!("Version {} not found", version))?;
 
-        let asset_name = self.get_asset_name(&version);
+        let asset_name = self.get_asset_name();
         let asset = release
             .assets
             .iter()
             .find(|a| a.name.starts_with(&asset_name))
             .ok_or_else(|| anyhow!("No compatible binary found for your system"))?;
 
-        let client = Client::new();
-        let response = client
-            .get(&asset.browser_download_url)
-            .header("User-Agent", "suiup")
-            .send()
-            .await?;
+        download_file(
+            &asset.browser_download_url,
+            &mvr_binary_path,
+            format!("mvr-{}", version).as_str(),
+        )
+        .await?;
 
-        if !response.status().is_success() {
-            return Err(anyhow!(
-                "Failed to download MVR binary: HTTP {}",
-                response.status()
-            ));
-        }
-
-        let total_size = response
-            .content_length()
-            .ok_or_else(|| anyhow!("Failed to get content length"))?;
-
-        let pb = ProgressBar::new(total_size);
-        pb.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-            .unwrap()
-            .progress_chars("#>-"));
-
-        let binary_path = self.install_dir.join(Self::get_binary_name());
-        println!("Installing MVR binary to {:?}", binary_path);
-
-        let mut file = std::fs::File::create(&binary_path)?;
-        let mut downloaded: u64 = 0;
-        let mut stream = response.bytes_stream();
-
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
-            downloaded = std::cmp::min(downloaded + (chunk.len() as u64), total_size);
-            pb.set_position(downloaded);
-            file.write_all(&chunk)?;
-        }
-
-        pb.finish_with_message("Download complete");
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&binary_path)?.permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&binary_path, perms)?;
-        }
-
-        Ok(())
+        Ok(version)
     }
 }
-
