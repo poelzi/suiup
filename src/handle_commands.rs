@@ -36,7 +36,6 @@ use crate::types::InstalledBinaries;
 use crate::types::Network;
 use crate::types::Release;
 use crate::types::Version;
-use crate::walrus;
 use crate::{
     get_config_file, get_default_bin_dir, get_suiup_cache_dir, get_suiup_config_dir,
     get_suiup_data_dir, GITHUB_REPO, RELEASES_ARCHIVES_FOLDER,
@@ -45,6 +44,7 @@ use clap_complete::Shell;
 use std::cmp::min;
 use std::env;
 
+pub const WALRUS_BASE_URL: &str = "https://storage.googleapis.com/mysten-walrus-binaries";
 fn available_components() -> &'static [&'static str] {
     &["sui", "sui-bridge", "sui-faucet", "walrus", "mvr"]
 }
@@ -158,16 +158,26 @@ async fn install_from_nightly(
 async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
     if !check_if_binaries_exist("walrus", network.clone(), "latest")? {
         println!("Adding component: walrus-latest");
-        let arch = walrus::detect_arch().ok_or_else(|| anyhow!("Unsupported OS"))?;
+        let (os, arch) = detect_os_arch()?;
         let download_dir = binaries_folder()?.join(network.clone());
-        let installer = walrus::WalrusInstaller::new(arch, &download_dir);
-        installer.download().await?;
+        let download_to = download_dir.join("walrus-latest");
+        download_file(
+            &format!(
+                "{}/walrus-{network}-latest-{os}-{arch}",
+                WALRUS_BASE_URL,
+                network = network
+            ),
+            &download_to,
+            "walrus-latest",
+        )
+        .await?;
 
-        let filename = format!("walrus");
+        let filename = "walrus";
+
         #[cfg(target_os = "windows")]
-        let filename = format!("{}.exe", filename);
+        let filename = format!("walrus.exe");
 
-        install_binary("walrus", network, "latest", false, binaries_folder()?, yes)?;
+        install_binary(filename, network, "latest", false, binaries_folder()?, yes)?;
     } else {
         println!("Component walrus-latest already installed");
     }
@@ -177,7 +187,7 @@ async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
 async fn install_mvr(version_spec: Option<String>, yes: bool) -> Result<(), Error> {
     let version = version_spec.clone().unwrap_or_else(|| "".to_string());
     if !check_if_binaries_exist("mvr", "standalone".to_string(), &version)? {
-        let installer = mvr::MvrInstaller::new();
+        let mut installer = mvr::MvrInstaller::new();
         let version = version_spec.clone();
         let installed_version = installer.download_version(version.clone()).await?;
 
@@ -458,7 +468,7 @@ pub async fn handle_update(binary_name: String) -> Result<(), Error> {
     let installed_binaries = InstalledBinaries::new()?;
     let binaries = installed_binaries.binaries();
     if !binaries.iter().any(|x| x.binary_name == binary_name) {
-        bail!("Binary {binary_name} not found in installed binaries. Use `suiup show` to see installed binaries.")
+        bail!("Binary {binary_name} not found in installed binaries. Use `suiup show` to see installed binaries and `suiup install` to install the binary.")
     }
     let binaries_by_network = installed_binaries_grouped_by_network(Some(installed_binaries))?;
 
@@ -486,6 +496,29 @@ pub async fn handle_update(binary_name: String) -> Result<(), Error> {
 
     // find the last local version of the name binary, for each network
     // then find the last release for each network and compare the versions
+    println!("{:?}", network_local_last_version);
+
+    if binary_name == "mvr" {
+        handle_component(ComponentCommands::Add {
+            components: vec![binary_name.clone()],
+            debug: false,
+            nightly: None,
+            yes: true,
+        })
+        .await?;
+        return Ok(());
+    }
+
+    if binary_name == "walrus" {
+        handle_component(ComponentCommands::Add {
+            components: vec![binary_name.clone()],
+            debug: false,
+            nightly: None,
+            yes: true,
+        })
+        .await?;
+        return Ok(());
+    }
 
     let releases = release_list().await?.0;
     let mut to_update = vec![];
@@ -632,7 +665,7 @@ async fn find_last_release_by_network(releases: Vec<Release>, network: &str) -> 
 }
 
 /// Detects the current OS and architecture
-fn detect_os_arch() -> Result<(String, String), Error> {
+pub fn detect_os_arch() -> Result<(String, String), Error> {
     let os = match whoami::platform() {
         whoami::Platform::Linux => "linux",
         whoami::Platform::Windows => "windows",
@@ -715,9 +748,17 @@ pub async fn download_file(url: &str, download_to: &PathBuf, name: &str) -> Resu
         return Err(anyhow!("Failed to download: {}", response.status()));
     }
 
-    let total_size = response
-        .content_length()
-        .ok_or_else(|| anyhow!("Failed to get content length"))?;
+    let mut total_size = response.content_length().unwrap_or_else(|| 0);
+    //walrus is on google storage, so different content length header
+    if total_size == 0 {
+        total_size = response
+            .headers()
+            .get("x-goog-stored-content-length")
+            .and_then(|c| c.to_str().ok())
+            .and_then(|c| c.parse::<u64>().ok())
+            .unwrap_or(0);
+    }
+
     if download_to.exists() {
         if download_to.metadata()?.len() == total_size {
             println!("Found {name} in cache");
@@ -778,42 +819,6 @@ async fn download_asset_from_github(
     file_path.push(&asset.name);
 
     download_file(&url, &file_path, &name).await
-
-    // let response = Client::new()
-    //     .get(&asset.browser_download_url)
-    //     .send()
-    //     .await?;
-    // let total_size = response.content_length().unwrap_or(0);
-    // // Find the archive file for the current OS and architecture
-    //
-    // let pb = ProgressBar::new(total_size);
-    // pb.set_style(ProgressStyle::default_bar()
-    //     .template("Downloading release: {spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}")
-    //     .unwrap()
-    //     .progress_chars("=>-"));
-    //
-    // let mut file = File::create(file_path)?;
-    // let mut downloaded: u64 = 0;
-    // let mut stream = response.bytes_stream();
-    // let start = Instant::now();
-    //
-    // while let Some(item) = stream.next().await {
-    //     let chunk = item?;
-    //     file.write_all(&chunk)?;
-    //     let new = min(downloaded + (chunk.len() as u64), total_size);
-    //     downloaded = new;
-    //     pb.set_position(new);
-    //
-    //     let elapsed = start.elapsed().as_secs_f64();
-    //     if elapsed > 0.0 {
-    //         let speed = downloaded as f64 / elapsed;
-    //         pb.set_message(format!("Speed: {}/s", HumanBytes(speed as u64)));
-    //     }
-    // }
-    //
-    // pb.finish_with_message("Download completed");
-
-    // Ok(asset.name.to_string())
 }
 
 /// Extracts a component from the release archive. The component's name is identified by the
@@ -971,6 +976,13 @@ fn update_after_install(
                 let dst = default_bin_folder()?.join(binary);
 
                 std::fs::copy(&src, &dst)?;
+
+                #[cfg(unix)]
+                {
+                    let mut perms = std::fs::metadata(&dst)?.permissions();
+                    perms.set_mode(0o755);
+                    std::fs::set_permissions(&dst, perms)?;
+                }
 
                 println!("[{network}] {binary}-{version} set as default");
             }

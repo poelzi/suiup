@@ -1,4 +1,4 @@
-use crate::handle_commands::{binaries_folder, download_file};
+use crate::handle_commands::{binaries_folder, detect_os_arch, download_file};
 use anyhow::{anyhow, Error};
 use reqwest::Client;
 use serde::Deserialize;
@@ -17,16 +17,24 @@ pub struct MvrAsset {
     pub browser_download_url: String,
 }
 
-pub struct MvrInstaller;
+pub struct MvrInstaller {
+    releases: Vec<MvrRelease>,
+}
 
 impl MvrInstaller {
     pub fn new() -> Self {
-        Self
+        Self {
+            releases: Vec::new(),
+        }
     }
 
-    pub async fn get_releases(&self) -> Result<Vec<MvrRelease>, Error> {
+    pub async fn get_releases(&mut self) -> Result<(), Error> {
         let client = Client::new();
         let url = format!("https://api.github.com/repos/{}/releases", MVR_REPO);
+
+        if self.releases.len() > 0 {
+            return Ok(());
+        }
 
         let releases: Vec<MvrRelease> = client
             .get(&url)
@@ -35,60 +43,27 @@ impl MvrInstaller {
             .await?
             .json()
             .await?;
-
-        Ok(releases)
+        self.releases = releases;
+        Ok(())
     }
 
-    pub async fn get_latest_version(&self) -> Result<String, Error> {
-        let releases = self.get_releases().await?;
+    pub async fn get_latest_release(&self) -> Result<&MvrRelease, Error> {
+        println!("Downloading release list");
+        let releases = &self.releases;
         releases
             .first()
-            .map(|r| r.tag_name.clone())
             .ok_or_else(|| anyhow!("No MVR releases found"))
     }
 
-    pub fn get_binary_name() -> String {
-        #[cfg(target_os = "windows")]
-        {
-            "mvr.exe".to_string()
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            "mvr".to_string()
-        }
-    }
-
-    pub fn get_asset_name(&self) -> String {
-        let (os, arch) = if cfg!(target_os = "macos") {
-            if cfg!(target_arch = "x86_64") {
-                ("macos", "x86_64")
-            } else {
-                ("macos", "arm64")
-            }
-        } else if cfg!(target_os = "windows") {
-            ("windows", "x86_64")
-        } else {
-            // Linux/Ubuntu
-            if cfg!(target_arch = "x86_64") {
-                ("ubuntu", "x86_64")
-            } else {
-                ("ubuntu", "aarch64")
-            }
-        };
-
-        let mut name = format!("mvr-{os}-{arch}");
-        if cfg!(target_os = "windows") {
-            name.push_str(".exe");
-        }
-        name
-    }
-
     /// Download the MVR CLI binary, if it does not exist in the binary folder.
-    pub async fn download_version(&self, version: Option<String>) -> Result<String, Error> {
+    pub async fn download_version(&mut self, version: Option<String>) -> Result<String, Error> {
         let version = if let Some(v) = version {
             v
         } else {
-            self.get_latest_version().await?
+            if self.releases.is_empty() {
+                self.get_releases().await?;
+            }
+            self.get_latest_release().await?.tag_name.clone()
         };
 
         let cache_folder = binaries_folder()?.join("standalone");
@@ -97,17 +72,26 @@ impl MvrInstaller {
         }
         let mvr_binary_path = cache_folder.join(format!("mvr-{}", version));
         if mvr_binary_path.exists() {
-            println!("MVR v{} already installed. Use `suiup default set mvr {}` to set the default version to the desired one", version, version);
+            println!("Component mvr-{version} already installed. Use `suiup default set mvr {version}` to set the default version to the desired one");
             return Ok(version);
         }
 
-        let releases = self.get_releases().await?;
-        let release = releases
+        if self.releases.is_empty() {
+            self.get_releases().await?;
+        }
+
+        let release = self
+            .releases
             .iter()
             .find(|r| r.tag_name == version)
             .ok_or_else(|| anyhow!("Version {} not found", version))?;
 
-        let asset_name = self.get_asset_name();
+        let (os, arch) = detect_os_arch()?;
+        let asset_name = format!("mvr-{}-{}", os, arch);
+
+        #[cfg(target_os = "windows")]
+        let asset_name = format!("{}.exe", asset_name);
+
         let asset = release
             .assets
             .iter()
