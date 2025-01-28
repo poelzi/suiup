@@ -36,14 +36,13 @@ use crate::mvr;
 use crate::types::Binaries;
 use crate::types::BinaryVersion;
 use crate::types::InstalledBinaries;
-use crate::types::Network;
 use crate::types::Release;
 use crate::types::Version;
 use crate::{
     get_config_file, get_default_bin_dir, get_suiup_cache_dir, get_suiup_config_dir,
     get_suiup_data_dir, GITHUB_REPO, RELEASES_ARCHIVES_FOLDER,
 };
-use clap_complete::Shell;
+// use clap_complete::Shell;
 use std::cmp::min;
 use std::env;
 
@@ -273,8 +272,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 }
             }
         }
-        ComponentCommands::Remove { binaries } => {
-            let binaries: Vec<String> = binaries.into_iter().map(|c| c.to_string()).collect();
+        ComponentCommands::Remove { binary } => {
             // remove from default file
             // remove from default_bin
             // remove from binaries
@@ -285,30 +283,44 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             let binaries_to_remove = installed_binaries
                 .binaries()
                 .iter()
-                .filter(|b| binaries.contains(&b.binary_name))
+                .filter(|b| binary.to_string() == b.binary_name)
                 .collect::<Vec<_>>();
 
             for p in &binaries_to_remove {
                 if let Some(p) = p.path.as_ref() {
                     if !PathBuf::from(p).exists() {
-                        bail!("Binary {p} does not exist. Aborting the command.");
+                        println!("Binary {p} does not exist. Aborting the command.");
+
+                        return Ok(());
                     }
                 }
             }
             println!("Removing binaries...");
 
-            let default_file =
-                default_file_path().map_err(|e| anyhow!("Cannot find default file: {e}"))?;
-            let default_binaries = std::fs::read_to_string(&default_file)
+            // let default_file =
+            //     default_file_path().map_err(|e| anyhow!("Cannot find default file: {e}"))?;
+            // let default_binaries = std::fs::read_to_string(&default_file)
+            //     .map_err(|_| anyhow!("Cannot read file {}", default_file.display()))?;
+            //
+            // println!("{}", default_binaries);
+            // let mut default_binaries: HashMap<String, (Network, Version, bool)> =
+            //     serde_json::from_str(&default_binaries)
+            //         .map_err(|_| anyhow!("Cannot decode default binary file to JSON"))?;
+
+            let default_file = default_file_path()?;
+            let default = std::fs::read_to_string(&default_file)
                 .map_err(|_| anyhow!("Cannot read file {}", default_file.display()))?;
-            let mut default_binaries: HashMap<String, (Network, Version, bool)> =
-                serde_json::from_str(&default_binaries)
-                    .map_err(|_| anyhow!("Cannot decode default binary file to JSON"))?;
+            let mut default_binaries: HashMap<String, (String, Version, bool)> =
+                serde_json::from_str(&default).map_err(|_| {
+                    anyhow!("Cannot decode default binary file to JSON. Is the file corrupted?")
+                })?;
 
             // Remove the installed binaries folder
             for binary in &binaries_to_remove {
                 if let Some(p) = binary.path.as_ref() {
+                    debug!("Removing binary: {p}");
                     std::fs::remove_file(p).map_err(|e| anyhow!("Cannot remove file: {e}"))?;
+                    debug!("File removed: {p}");
                 }
             }
 
@@ -327,6 +339,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 }
 
                 default_binaries.remove(binary);
+                debug!("Removed {binary} from default binries JSON file");
             }
 
             // Remove from default binaries metadata file
@@ -335,9 +348,9 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 .write_all(serde_json::to_string_pretty(&default_binaries)?.as_bytes())?;
 
             // Remove from installed_binaries metadata file
-            for binary in &binaries {
-                installed_binaries.remove_binary(binary)
-            }
+            installed_binaries.remove_binary(&binary.to_string());
+            debug!("Removed {binary} from installed_binaries JSON file. Saving updated data");
+            // Save file
             installed_binaries.save_to_file()?;
         }
     }
@@ -437,7 +450,15 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                 if dst.exists() {
                     std::fs::remove_file(&dst)?;
                 }
-                std::os::unix::fs::symlink(&src, &dst)?;
+
+                std::fs::copy(&src, &dst)?;
+
+                #[cfg(unix)]
+                {
+                    let mut perms = std::fs::metadata(&dst)?.permissions();
+                    perms.set_mode(0o755);
+                    std::fs::set_permissions(&dst, perms)?;
+                }
             }
 
             #[cfg(target_os = "windows")]
@@ -894,15 +915,15 @@ pub(crate) fn extract_version_from_release(release: &str) -> Result<String, Erro
     Ok(captures.get(0).unwrap().as_str().to_string())
 }
 
-/// Returns the path to the Suiup configuration folder. The folder is created if it does not exist.
-fn config_folder_or_create() -> Result<PathBuf, anyhow::Error> {
-    let path = get_suiup_config_dir();
-    if !path.is_dir() {
-        std::fs::create_dir_all(path.as_path())
-            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
-    }
-    Ok(path)
-}
+// /// Returns the path to the Suiup configuration folder. The folder is created if it does not exist.
+// fn config_folder_or_create() -> Result<PathBuf, anyhow::Error> {
+//     let path = get_suiup_config_dir();
+//     if !path.is_dir() {
+//         std::fs::create_dir_all(path.as_path())
+//             .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
+//     }
+//     Ok(path)
+// }
 
 /// Returns the path to the default binaries folder. The folder is created if it does not exist.
 fn default_bin_folder() -> Result<PathBuf, anyhow::Error> {
@@ -1218,35 +1239,35 @@ fn check_path_and_warn() -> Result<(), Error> {
     Ok(())
 }
 
-pub(crate) fn print_completion_instructions(shell: &Shell) {
-    match shell {
-        Shell::Bash => {
-            println!("\nTo install bash completions:");
-            println!("1. Create completion directory if it doesn't exist:");
-            println!("    mkdir -p ~/.local/share/bash-completion/completions");
-            println!("2. Add completions to the directory:");
-            println!(
-                "    suiup completion bash > ~/.local/share/bash-completion/completions/suiup"
-            );
-            println!("\nMake sure you have bash-completion installed and loaded in your ~/.bashrc");
-        }
-        Shell::Fish => {
-            println!("\nTo install fish completions:");
-            println!("1. Create completion directory if it doesn't exist:");
-            println!("    mkdir -p ~/.config/fish/completions");
-            println!("2. Add completions to the directory:");
-            println!("    suiup completion fish > ~/.config/fish/completions/suiup.fish");
-        }
-        Shell::Zsh => {
-            println!("\nTo install zsh completions:");
-            println!("1. Create completion directory if it doesn't exist:");
-            println!("    mkdir -p ~/.zsh/completions");
-            println!("2. Add completions to the directory:");
-            println!("    suiup completion zsh > ~/.zsh/completions/_suiup");
-            println!("3. Add the following to your ~/.zshrc:");
-            println!("    fpath=(~/.zsh/completions $fpath)");
-            println!("    autoload -U compinit; compinit");
-        }
-        _ => {}
-    }
-}
+// pub(crate) fn print_completion_instructions(shell: &Shell) {
+//     match shell {
+//         Shell::Bash => {
+//             println!("\nTo install bash completions:");
+//             println!("1. Create completion directory if it doesn't exist:");
+//             println!("    mkdir -p ~/.local/share/bash-completion/completions");
+//             println!("2. Add completions to the directory:");
+//             println!(
+//                 "    suiup completion bash > ~/.local/share/bash-completion/completions/suiup"
+//             );
+//             println!("\nMake sure you have bash-completion installed and loaded in your ~/.bashrc");
+//         }
+//         Shell::Fish => {
+//             println!("\nTo install fish completions:");
+//             println!("1. Create completion directory if it doesn't exist:");
+//             println!("    mkdir -p ~/.config/fish/completions");
+//             println!("2. Add completions to the directory:");
+//             println!("    suiup completion fish > ~/.config/fish/completions/suiup.fish");
+//         }
+//         Shell::Zsh => {
+//             println!("\nTo install zsh completions:");
+//             println!("1. Create completion directory if it doesn't exist:");
+//             println!("    mkdir -p ~/.zsh/completions");
+//             println!("2. Add completions to the directory:");
+//             println!("    suiup completion zsh > ~/.zsh/completions/_suiup");
+//             println!("3. Add the following to your ~/.zshrc:");
+//             println!("    fpath=(~/.zsh/completions $fpath)");
+//             println!("    autoload -U compinit; compinit");
+//         }
+//         _ => {}
+//     }
+// }

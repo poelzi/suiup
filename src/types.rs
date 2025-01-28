@@ -114,8 +114,8 @@ impl Display for Network {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
 /// Struct to store the installed binaries
+#[derive(Serialize, Deserialize, Debug)]
 pub struct InstalledBinaries {
     binaries: Vec<BinaryVersion>,
 }
@@ -133,6 +133,7 @@ impl InstalledBinaries {
         Self::read_from_file()
     }
 
+    /// Save the installed binaries data to the installed binaries JSON file
     pub(crate) fn save_to_file(&self) -> Result<(), Error> {
         let s = serde_json::to_string_pretty(self)
             .map_err(|_| anyhow!("Cannot read the installed binaries file"))?;
@@ -141,6 +142,7 @@ impl InstalledBinaries {
         Ok(())
     }
 
+    /// Read the installed binaries JSON file
     pub(crate) fn read_from_file() -> Result<Self, Error> {
         let s = std::fs::read_to_string(installed_binaries_file()?)
             .map_err(|_| anyhow!("Cannot read from the installed binaries file"))?;
@@ -149,16 +151,19 @@ impl InstalledBinaries {
         Ok(binaries)
     }
 
+    /// Add a binary to the installed binaries JSON file
     pub(crate) fn add_binary(&mut self, binary: BinaryVersion) {
         if self.binaries.iter().find(|b| b == &&binary).is_none() {
             self.binaries.push(binary);
         }
     }
 
+    /// Remove a binary from the installed binaries JSON file
     pub(crate) fn remove_binary(&mut self, binary: &str) {
         self.binaries.retain(|b| b.binary_name != binary);
     }
 
+    /// List the binaries in the installed binaries JSON file
     pub(crate) fn binaries(&self) -> &[BinaryVersion] {
         &self.binaries
     }

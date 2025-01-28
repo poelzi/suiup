@@ -80,7 +80,7 @@ pub(crate) enum ComponentCommands {
     )]
     Remove {
         #[arg(value_enum)]
-        binaries: Vec<BinaryName>,
+        binary: BinaryName,
     },
 }
 
