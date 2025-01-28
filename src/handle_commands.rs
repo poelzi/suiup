@@ -356,6 +356,9 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
         }
 
         DefaultCommands::Set { name, debug } => {
+            if name.len() != 2 {
+                bail!("Invalid number of arguments. Version is required: 'sui testnet-v1.39.3', 'sui testnet' -- this will use an installed binary that has the higest testnet version. \n For `mvr` only pass the version: `mvr v0.0.5`")
+            }
             let CommandMetadata {
                 name,
                 network,

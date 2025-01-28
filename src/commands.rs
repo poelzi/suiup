@@ -91,8 +91,7 @@ pub(crate) enum DefaultCommands {
     #[command(about = "Set the default Sui CLI version")]
     Set {
         #[arg(
-            num_args = 2,
-            help = "Component to be set as default and the version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
+            help = "Component to be set as default and the version (e.g. 'sui testnet-v1.39.3', 'sui testnet' -- this will use an installed binary that has the higest testnet version)"
         )]
         name: Vec<String>,
         #[arg(
