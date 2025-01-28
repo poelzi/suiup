@@ -150,7 +150,9 @@ impl InstalledBinaries {
     }
 
     pub(crate) fn add_binary(&mut self, binary: BinaryVersion) {
-        self.binaries.push(binary);
+        if self.binaries.iter().find(|b| b == &&binary).is_none() {
+            self.binaries.push(binary);
+        }
     }
 
     pub(crate) fn remove_binary(&mut self, binary: &str) {

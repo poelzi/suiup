@@ -25,8 +25,11 @@ use std::process::Stdio;
 use std::time::Duration;
 use std::time::Instant;
 use tar::Archive;
+use tracing::debug;
 
 use crate::commands::parse_component_with_version;
+use crate::commands::BinaryName;
+use crate::commands::CommandMetadata;
 use crate::commands::ComponentCommands;
 use crate::commands::DefaultCommands;
 use crate::mvr;
@@ -184,12 +187,14 @@ async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
     Ok(())
 }
 
-async fn install_mvr(version_spec: Option<String>, yes: bool) -> Result<(), Error> {
-    let version = version_spec.clone().unwrap_or_else(|| "".to_string());
-    if !check_if_binaries_exist("mvr", "standalone".to_string(), &version)? {
+async fn install_mvr(version: Option<String>, yes: bool) -> Result<(), Error> {
+    if !check_if_binaries_exist(
+        "mvr",
+        "standalone".to_string(),
+        &version.clone().unwrap_or_default(),
+    )? {
         let mut installer = mvr::MvrInstaller::new();
-        let version = version_spec.clone();
-        let installed_version = installer.download_version(version.clone()).await?;
+        let installed_version = installer.download_version(version).await?;
 
         println!("Adding component: mvr-{installed_version}");
 
@@ -203,6 +208,7 @@ async fn install_mvr(version_spec: Option<String>, yes: bool) -> Result<(), Erro
             yes,
         )?;
     } else {
+        let version = version.unwrap_or_default();
         println!("Component mvr-{version} already installed. Use `suiup default set mvr {version}` to set the default version to the specified one.");
     }
 
@@ -238,10 +244,12 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             std::fs::create_dir_all(&installed_bins_dir)?;
 
             let components = components.join(" ");
-            let (component, version_spec) =
+            let component =
                 parse_component_with_version(&components).map_err(|e| anyhow!("{e}"))?;
 
-            let name = component.to_string();
+            let name = component.name.to_string();
+            let network = component.network;
+            let version = component.version;
             let available_components = available_components();
             if !available_components.contains(&name.as_str()) {
                 println!("Component {} does not exist", name);
@@ -250,19 +258,17 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
 
             match (name.as_str(), &nightly) {
                 ("walrus", _) => {
-                    let (network, _) = parse_version_spec(version_spec)?;
                     std::fs::create_dir_all(&installed_bins_dir.join(network.clone()))?;
                     install_walrus(network, yes).await?;
                 }
                 ("mvr", _) => {
                     std::fs::create_dir_all(&installed_bins_dir.join("standalone"))?;
-                    install_mvr(version_spec, yes).await?;
+                    install_mvr(version, yes).await?;
                 }
                 (_, Some(branch)) => {
                     install_from_nightly(&name, branch, debug, yes).await?;
                 }
                 _ => {
-                    let (network, version) = parse_version_spec(version_spec)?;
                     install_from_release(&name, &network, version, debug, yes).await?;
                 }
             }
@@ -340,6 +346,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
 
 /// Handles the default commands
 pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
+    println!("Handling default command: {:?}", cmd);
     match cmd {
         DefaultCommands::Get => {
             let default = std::fs::read_to_string(default_file_path()?)?;
@@ -348,13 +355,18 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");
         }
 
-        DefaultCommands::Set {
-            name,
-            network_release,
-            version,
-            debug,
-        } => {
-            let network = network_release.unwrap_or_else(|| "testnet".to_string());
+        DefaultCommands::Set { name, debug } => {
+            let CommandMetadata {
+                name,
+                network,
+                version,
+            } = parse_component_with_version(&name.join(" "))?;
+
+            let network = if name == BinaryName::Mvr {
+                "standalone".to_string()
+            } else {
+                network
+            };
 
             // a map of network --> to BinaryVersion
             let installed_binaries = installed_binaries_grouped_by_network(None)?;
@@ -365,7 +377,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             // Check if the binary exists in any network
             let binary_exists = installed_binaries
                 .values()
-                .any(|bins| bins.iter().any(|x| x.binary_name == name));
+                .any(|bins| bins.iter().any(|x| x.binary_name == name.to_string()));
             if !binary_exists {
                 bail!("Binary {name} not found in installed binaries. Use `suiup show` to see installed binaries.");
             }
@@ -375,7 +387,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             } else {
                 binaries
                     .iter()
-                    .filter(|b| b.binary_name == name)
+                    .filter(|b| b.binary_name == name.to_string())
                     .max_by(|a, b| a.version.cmp(&b.version))
                     .map(|b| b.version.clone())
                     .ok_or_else(|| anyhow!("No version found for {name} in {network}"))?
@@ -383,10 +395,11 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
 
             // check if the binary for this network and version exists
             let binary_version = format!("{}-{}", name, version);
+            debug!("Checking if {binary_version} exists");
             binaries
                 .iter()
                 .find(|b| {
-                    b.binary_name == name && b.version == version && b.network_release == network
+                    b.binary_name == name.to_string() && b.version == version && b.network_release == network
                 })
                 .ok_or_else(|| {
                     anyhow!("Binary {binary_version} from {network} release not found. Use `suiup show` to see installed binaries.")
@@ -402,7 +415,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                     format!("{}.exe", name)
                 };
             }
-            dst.push(&name);
+            dst.push(&name.to_string());
 
             let mut src = binaries_folder()?;
             src.push(network.to_string());
@@ -429,7 +442,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                 std::fs::copy(&src, &dst)?;
             }
 
-            update_default_version_file(&vec![name], network, &version, debug)?;
+            update_default_version_file(&vec![name.to_string()], network, &version, debug)?;
             println!("Default binary updated successfully");
         }
     }
@@ -496,7 +509,6 @@ pub async fn handle_update(binary_name: String) -> Result<(), Error> {
 
     // find the last local version of the name binary, for each network
     // then find the last release for each network and compare the versions
-    println!("{:?}", network_local_last_version);
 
     if binary_name == "mvr" {
         handle_component(ComponentCommands::Add {
@@ -1233,25 +1245,5 @@ pub(crate) fn print_completion_instructions(shell: &Shell) {
             println!("    autoload -U compinit; compinit");
         }
         _ => {}
-    }
-}
-
-fn parse_version_spec(spec: Option<String>) -> Result<(String, Option<String>), Error> {
-    match spec {
-        None => Ok(("testnet".to_string(), None)),
-        Some(spec) => {
-            if spec.starts_with("testnet-")
-                || spec.starts_with("devnet-")
-                || spec.starts_with("mainnet-")
-            {
-                let parts: Vec<&str> = spec.splitn(2, '-').collect();
-                Ok((parts[0].to_string(), Some(parts[1].to_string())))
-            } else if spec == "testnet" || spec == "devnet" || spec == "mainnet" {
-                Ok((spec, None))
-            } else {
-                // Assume it's a version for testnet
-                Ok(("testnet".to_string(), Some(spec)))
-            }
-        }
     }
 }

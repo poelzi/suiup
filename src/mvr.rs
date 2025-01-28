@@ -63,7 +63,9 @@ impl MvrInstaller {
             if self.releases.is_empty() {
                 self.get_releases().await?;
             }
-            self.get_latest_release().await?.tag_name.clone()
+            let latest_release = self.get_latest_release().await?.tag_name.clone();
+            println!("No version specified. Downloading latest release: {latest_release}");
+            latest_release
         };
 
         let cache_folder = binaries_folder()?.join("standalone");

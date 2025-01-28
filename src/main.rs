@@ -1,9 +1,6 @@
 use clap::Parser;
 use handle_commands::initialize;
-use handle_commands::{
-    handle_component, handle_default, handle_show, handle_update, handle_which,
-    print_completion_instructions,
-};
+use handle_commands::{handle_component, handle_default, handle_show, handle_update, handle_which};
 
 use anyhow::anyhow;
 use anyhow::Error;

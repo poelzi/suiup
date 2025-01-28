@@ -1,3 +1,4 @@
+use anyhow::{anyhow, bail, Error};
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
@@ -79,22 +80,21 @@ pub(crate) enum ComponentCommands {
     )]
     Remove {
         #[arg(value_enum)]
-        binaries: Vec<SuiComponent>,
+        binaries: Vec<BinaryName>,
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Debug, Subcommand)]
 pub(crate) enum DefaultCommands {
     #[command(about = "Get the default Sui CLI version")]
     Get,
     #[command(about = "Set the default Sui CLI version")]
     Set {
-        /// Component to be set as default
-        name: String,
-        #[arg(long, required=false, default_missing_value = "testnet", num_args=0..=1)]
-        network_release: Option<String>,
-        #[arg(long, help = "Version of the component to set to default.")]
-        version: Option<String>,
+        #[arg(
+            num_args = 2,
+            help = "Component to be set as default and the version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
+        )]
+        name: Vec<String>,
         #[arg(
             long,
             help = "Whether to set the debug version of the component as default (only available for sui)."
@@ -105,7 +105,7 @@ pub(crate) enum DefaultCommands {
 
 #[derive(Clone, Debug, PartialEq, ValueEnum)]
 #[value(rename_all = "lowercase")]
-pub enum SuiComponent {
+pub enum BinaryName {
     #[value(name = "sui")]
     Sui,
     #[value(name = "sui-bridge")]
@@ -118,46 +118,84 @@ pub enum SuiComponent {
     Mvr,
 }
 
-impl std::fmt::Display for SuiComponent {
+impl std::fmt::Display for BinaryName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SuiComponent::Sui => write!(f, "sui"),
-            SuiComponent::SuiBridge => write!(f, "sui-bridge"),
-            SuiComponent::SuiFaucet => write!(f, "sui-faucet"),
-            SuiComponent::Walrus => write!(f, "walrus"),
-            SuiComponent::Mvr => write!(f, "mvr"),
+            BinaryName::Sui => write!(f, "sui"),
+            BinaryName::SuiBridge => write!(f, "sui-bridge"),
+            BinaryName::SuiFaucet => write!(f, "sui-faucet"),
+            BinaryName::Walrus => write!(f, "walrus"),
+            BinaryName::Mvr => write!(f, "mvr"),
         }
     }
 }
 
-pub fn parse_component_with_version(s: &str) -> Result<(SuiComponent, Option<String>), String> {
+pub struct CommandMetadata {
+    pub name: BinaryName,
+    pub network: String,
+    pub version: Option<String>,
+}
+
+pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::Error> {
     let parts: Vec<&str> = s.split_whitespace().collect();
 
     match parts.len() {
         1 => {
-            let component = SuiComponent::from_str(parts[0], true)
-                .map_err(|_| format!("Invalid component name: {}", parts[0]))?;
-            Ok((component, None))
+            let component = BinaryName::from_str(parts[0], true)
+                .map_err(|_| anyhow!("Invalid component name: {}", parts[0]))?;
+            let (network, version) = parse_version_spec(None)?;
+            let component_metadata = CommandMetadata {
+                name: component,
+                network,
+                version,
+            };
+            Ok(component_metadata)
         }
         2 => {
-            let component = SuiComponent::from_str(parts[0], true)
-                .map_err(|_| format!("Invalid component name: {}", parts[0]))?;
-            Ok((component, Some(parts[1].to_string())))
+            let component = BinaryName::from_str(parts[0], true)
+                .map_err(|_| anyhow!("Invalid component name: {}", parts[0]))?;
+            let (network, version) = parse_version_spec(Some(parts[1].to_string()))?;
+            let component_metadata = CommandMetadata {
+                name: component,
+                network,
+                version,
+            };
+            Ok(component_metadata)
         }
-        _ => Err("Invalid format. Use 'component' or 'component version'".to_string()),
+        _ => bail!("Invalid format. Use 'component' or 'component version'".to_string()),
     }
 }
 
-impl std::str::FromStr for SuiComponent {
+pub fn parse_version_spec(spec: Option<String>) -> Result<(String, Option<String>), Error> {
+    match spec {
+        None => Ok(("testnet".to_string(), None)),
+        Some(spec) => {
+            if spec.starts_with("testnet-")
+                || spec.starts_with("devnet-")
+                || spec.starts_with("mainnet-")
+            {
+                let parts: Vec<&str> = spec.splitn(2, '-').collect();
+                Ok((parts[0].to_string(), Some(parts[1].to_string())))
+            } else if spec == "testnet" || spec == "devnet" || spec == "mainnet" {
+                Ok((spec, None))
+            } else {
+                // Assume it's a version for testnet
+                Ok(("testnet".to_string(), Some(spec)))
+            }
+        }
+    }
+}
+
+impl std::str::FromStr for BinaryName {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "sui" => Ok(SuiComponent::Sui),
-            "sui-bridge" => Ok(SuiComponent::SuiBridge),
-            "sui-faucet" => Ok(SuiComponent::SuiFaucet),
-            "walrus" => Ok(SuiComponent::Walrus),
-            "mvr" => Ok(SuiComponent::Mvr),
+            "sui" => Ok(BinaryName::Sui),
+            "sui-bridge" => Ok(BinaryName::SuiBridge),
+            "sui-faucet" => Ok(BinaryName::SuiFaucet),
+            "walrus" => Ok(BinaryName::Walrus),
+            "mvr" => Ok(BinaryName::Mvr),
             _ => Err(format!("Unknown component: {}", s)),
         }
     }
