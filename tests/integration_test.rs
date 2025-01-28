@@ -1,8 +1,8 @@
-mod common;
+mod test_utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::common::TestEnv;
+    use crate::test_utils::TestEnv;
     use anyhow::Result;
     use assert_cmd::Command;
     use predicates::prelude::*;

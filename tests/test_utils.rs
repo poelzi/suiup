@@ -20,7 +20,7 @@ impl TestEnv {
         let data_dir = base.join("data");
         let config_dir = base.join("config");
         let cache_dir = base.join("cache");
-        let bin_dir = base.join("bin");
+        let bin_dir = base.join(".local/bin");
 
         // Create directories
         std::fs::create_dir_all(&data_dir)?;
