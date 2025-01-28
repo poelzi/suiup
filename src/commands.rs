@@ -37,7 +37,12 @@ pub(crate) enum Commands {
     #[command(about = "Show installed and active Sui binaries")]
     Show,
     #[command(about = "Update binary")]
-    Update { name: String },
+    Update {
+        #[arg(help = "Component to update (e.g. 'sui', 'mvr')")]
+        name: String,
+        #[arg(short, long, help = "Accept defaults without prompting")]
+        yes: bool,
+    },
     #[command(about = "Show the path where default binaries are installed")]
     Which,
     #[command(about = "Generate shell completion scripts")]
@@ -102,7 +107,7 @@ pub(crate) enum DefaultCommands {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, ValueEnum)]
+#[derive(Clone, Debug, PartialEq, Hash, Eq, ValueEnum)]
 #[value(rename_all = "lowercase")]
 pub enum BinaryName {
     #[value(name = "sui")]
@@ -149,6 +154,7 @@ impl std::fmt::Display for BinaryName {
     }
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct CommandMetadata {
     pub name: BinaryName,
     pub network: String,

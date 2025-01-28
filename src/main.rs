@@ -160,7 +160,7 @@ async fn main() -> Result<(), Error> {
             .await?
         }
         Commands::Show => handle_show()?,
-        Commands::Update { name } => handle_update(name).await?,
+        Commands::Update { name, yes } => handle_update(name, yes).await?,
         Commands::Which => handle_which()?,
         Commands::Completion { shell } => {
             let mut cmd = Suiup::command();

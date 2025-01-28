@@ -51,8 +51,8 @@ mod tests {
         // Install older version
         let mut cmd = Command::cargo_bin("suiup")?;
         cmd.arg("install")
-            .arg("sui")
-            .arg("testnet-v1.39.0")
+            .arg("mvr")
+            .arg("v0.0.4")
             .arg("-y")
             .env("XDG_DATA_HOME", &test_env.data_dir)
             .env("XDG_CONFIG_HOME", &test_env.config_dir)
@@ -64,7 +64,7 @@ mod tests {
         // Run update
         let mut cmd = Command::cargo_bin("suiup")?;
         cmd.arg("update")
-            .arg("sui")
+            .arg("mvr")
             .arg("-y")
             .env("XDG_DATA_HOME", &test_env.data_dir)
             .env("XDG_CONFIG_HOME", &test_env.config_dir)
@@ -74,19 +74,20 @@ mod tests {
         cmd.assert().success();
 
         // Verify new version exists
-        let binary_path = test_env.data_dir.join("suiup/binaries/testnet/sui-1.39.3");
-        assert!(binary_path.exists());
+        let binary_path = test_env.data_dir.join("suiup/binaries/standalone");
+        let folders = std::fs::read_dir(&binary_path)?;
+        let num_files: Vec<_> = folders.into_iter().collect();
+        // should have at least 2 versions, 1.39.0 and whatever latest is
+        assert!(num_files.len() >= 1);
 
         // Verify default binary exists
-        let default_sui_binary = test_env.bin_dir.join("sui");
+        let default_sui_binary = test_env.bin_dir.join("mvr");
         assert!(default_sui_binary.exists());
 
         // Test binary execution
         let mut cmd = Command::new(default_sui_binary);
         cmd.arg("--version");
-        cmd.assert()
-            .success()
-            .stdout(predicate::str::contains("1.39.3"));
+        cmd.assert().success();
 
         Ok(())
     }

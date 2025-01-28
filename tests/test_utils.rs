@@ -1,7 +1,7 @@
 use anyhow::Result;
+use std::env;
 use std::path::PathBuf;
 use tempfile::TempDir;
-use std::env;
 
 pub struct TestEnv {
     pub temp_dir: TempDir,
@@ -16,7 +16,7 @@ impl TestEnv {
     pub fn new() -> Result<Self> {
         let temp_dir = TempDir::new()?;
         let base = temp_dir.path();
-        
+
         let data_dir = base.join("data");
         let config_dir = base.join("config");
         let cache_dir = base.join("cache");
@@ -32,23 +32,21 @@ impl TestEnv {
         let vars_to_capture = vec![
             "HOME",
             "XDG_DATA_HOME",
-            "XDG_CONFIG_HOME", 
+            "XDG_CONFIG_HOME",
             "XDG_CACHE_HOME",
-            "PATH"
+            "PATH",
         ];
 
         let original_env = vars_to_capture
             .into_iter()
-            .filter_map(|var| {
-                env::var(var).ok().map(|val| (var.to_string(), val))
-            })
+            .filter_map(|var| env::var(var).ok().map(|val| (var.to_string(), val)))
             .collect();
 
         // Set test env vars
         env::set_var("XDG_DATA_HOME", &data_dir);
         env::set_var("XDG_CONFIG_HOME", &config_dir);
         env::set_var("XDG_CACHE_HOME", &cache_dir);
-        
+
         // Add bin dir to PATH
         let path = env::var("PATH").unwrap_or_default();
         let new_path = format!("{}:{}", bin_dir.display(), path);
@@ -57,7 +55,7 @@ impl TestEnv {
         Ok(Self {
             temp_dir,
             data_dir,
-            config_dir, 
+            config_dir,
             cache_dir,
             bin_dir,
             original_env,
@@ -77,7 +75,6 @@ impl Drop for TestEnv {
 // Mock HTTP client for testing
 #[cfg(test)]
 pub mod mock_http {
-    use std::collections::HashMap;
     use mockall::mock;
     use reqwest::Response;
 
@@ -86,4 +83,5 @@ pub mod mock_http {
             async fn get(&self, url: String) -> reqwest::Result<Response>;
         }
     }
-} 
+}
+

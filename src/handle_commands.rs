@@ -531,7 +531,7 @@ pub fn handle_show() -> Result<(), Error> {
 }
 
 /// Handles the `update` command
-pub async fn handle_update(binary_name: String) -> Result<(), Error> {
+pub async fn handle_update(binary_name: String, yes: bool) -> Result<(), Error> {
     if !available_components().contains(&binary_name.as_str()) {
         bail!("Invalid component name: {}", binary_name);
     }
@@ -573,7 +573,7 @@ pub async fn handle_update(binary_name: String) -> Result<(), Error> {
             components: vec![binary_name.clone()],
             debug: false,
             nightly: None,
-            yes: true,
+            yes,
         })
         .await?;
         return Ok(());
@@ -584,7 +584,7 @@ pub async fn handle_update(binary_name: String) -> Result<(), Error> {
             components: vec![binary_name.clone()],
             debug: false,
             nightly: None,
-            yes: true,
+            yes,
         })
         .await?;
         return Ok(());
@@ -609,7 +609,7 @@ pub async fn handle_update(binary_name: String) -> Result<(), Error> {
             components: vec![binary_name.clone()],
             debug: false,
             nightly: None,
-            yes: true,
+            yes,
         })
         .await?;
     }
