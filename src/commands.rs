@@ -76,7 +76,7 @@ pub(crate) enum ComponentCommands {
         yes: bool,
     },
     #[command(
-        about = "Remove one or more components. By default, the binary from each release will be removed."
+        about = "Remove one. By default, the binary from each release will be removed. Use --version to specify which exact version to remove"
     )]
     Remove {
         #[arg(value_enum)]

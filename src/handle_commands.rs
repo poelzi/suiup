@@ -187,9 +187,11 @@ async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
 }
 
 async fn install_mvr(version: Option<String>, yes: bool) -> Result<(), Error> {
+    let network = "standalone".to_string();
+    let binary_name = BinaryName::Mvr.to_string();
     if !check_if_binaries_exist(
-        "mvr",
-        "standalone".to_string(),
+        &binary_name,
+        network.clone(),
         &version.clone().unwrap_or_default(),
     )? {
         let mut installer = mvr::MvrInstaller::new();
@@ -197,10 +199,13 @@ async fn install_mvr(version: Option<String>, yes: bool) -> Result<(), Error> {
 
         println!("Adding component: mvr-{installed_version}");
 
-        let binary_path = default_bin_folder()?;
+        let binary_path = binaries_folder()?
+            .join(&network)
+            .join(format!("{}-{}", binary_name, installed_version));
+        println!("Installing mvr to {}", binary_path.display());
         install_binary(
-            "mvr",
-            "standalone".to_string(),
+            &binary_name,
+            network,
             &installed_version,
             false,
             binary_path,
@@ -246,38 +251,34 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             let component =
                 parse_component_with_version(&components).map_err(|e| anyhow!("{e}"))?;
 
-            let name = component.name.to_string();
+            let name = component.name;
             let network = component.network;
             let version = component.version;
             let available_components = available_components();
-            if !available_components.contains(&name.as_str()) {
+            if !available_components.contains(&name.to_string().as_str()) {
                 println!("Component {} does not exist", name);
                 return Ok(());
             }
 
-            match (name.as_str(), &nightly) {
-                ("walrus", _) => {
+            match (&name, &nightly) {
+                (BinaryName::Walrus, _) => {
                     std::fs::create_dir_all(&installed_bins_dir.join(network.clone()))?;
                     install_walrus(network, yes).await?;
                 }
-                ("mvr", _) => {
+                (BinaryName::Mvr, _) => {
                     std::fs::create_dir_all(&installed_bins_dir.join("standalone"))?;
                     install_mvr(version, yes).await?;
                 }
                 (_, Some(branch)) => {
-                    install_from_nightly(&name, branch, debug, yes).await?;
+                    install_from_nightly(&name.to_string().as_str(), branch, debug, yes).await?;
                 }
                 _ => {
-                    install_from_release(&name, &network, version, debug, yes).await?;
+                    install_from_release(&name.to_string().as_str(), &network, version, debug, yes)
+                        .await?;
                 }
             }
         }
         ComponentCommands::Remove { binary } => {
-            // remove from default file
-            // remove from default_bin
-            // remove from binaries
-            // REFACTOR THIS SHITTY CODE HAHAH!
-
             let mut installed_binaries = InstalledBinaries::new()?;
 
             let binaries_to_remove = installed_binaries
@@ -285,6 +286,13 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 .iter()
                 .filter(|b| binary.to_string() == b.binary_name)
                 .collect::<Vec<_>>();
+
+            if binaries_to_remove.is_empty() {
+                println!("No binaries found to remove");
+                return Ok(());
+            }
+
+            println!("Binaries to remove: {binaries_to_remove:?}");
 
             for p in &binaries_to_remove {
                 if let Some(p) = p.path.as_ref() {
@@ -295,17 +303,6 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                     }
                 }
             }
-            println!("Removing binaries...");
-
-            // let default_file =
-            //     default_file_path().map_err(|e| anyhow!("Cannot find default file: {e}"))?;
-            // let default_binaries = std::fs::read_to_string(&default_file)
-            //     .map_err(|_| anyhow!("Cannot read file {}", default_file.display()))?;
-            //
-            // println!("{}", default_binaries);
-            // let mut default_binaries: HashMap<String, (Network, Version, bool)> =
-            //     serde_json::from_str(&default_binaries)
-            //         .map_err(|_| anyhow!("Cannot decode default binary file to JSON"))?;
 
             let default_file = default_file_path()?;
             let default = std::fs::read_to_string(&default_file)
@@ -318,9 +315,11 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             // Remove the installed binaries folder
             for binary in &binaries_to_remove {
                 if let Some(p) = binary.path.as_ref() {
+                    println!("Found binary path: {p}");
                     debug!("Removing binary: {p}");
                     std::fs::remove_file(p).map_err(|e| anyhow!("Cannot remove file: {e}"))?;
                     debug!("File removed: {p}");
+                    println!("Removed binary: {} from {p}", binary.binary_name);
                 }
             }
 
@@ -339,7 +338,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 }
 
                 default_binaries.remove(binary);
-                debug!("Removed {binary} from default binries JSON file");
+                debug!("Removed {binary} from default binaries JSON file");
             }
 
             // Remove from default binaries metadata file

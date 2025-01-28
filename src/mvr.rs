@@ -107,6 +107,14 @@ impl MvrInstaller {
         )
         .await?;
 
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&mvr_binary_path)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&mvr_binary_path, perms)?;
+        }
+
         Ok(version)
     }
 }
