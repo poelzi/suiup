@@ -109,7 +109,7 @@ async fn install_from_release(
 }
 
 async fn install_from_nightly(
-    name: &str,
+    name: &BinaryName,
     branch: &str,
     debug: bool,
     yes: bool,
@@ -126,19 +126,21 @@ async fn install_from_nightly(
     pb.enable_steady_tick(Duration::from_millis(100));
     pb.set_message("Compiling...please wait");
 
+    let repo_url = name.repo_url();
     let cmd = Command::new("cargo")
         .args(&[
             "install",
             "--locked",
+            "--force",
             "--git",
-            "https://github.com/MystenLabs/sui",
+            repo_url,
             "--branch",
             branch,
-            name,
-            "--path",
+            name.to_str(),
+            "--root",
             binaries_folder()?.join(branch).to_str().unwrap(),
         ])
-        .stdout(Stdio::null())
+        .stdout(Stdio::inherit())
         .stderr(Stdio::piped())
         .spawn()?;
 
@@ -151,8 +153,32 @@ async fn install_from_nightly(
     }
 
     println!("Installation completed successfully!");
-    let binary_path = binaries_folder()?.join(branch).join(name);
-    install_binary(name, branch.to_string(), "nightly", debug, binary_path, yes)?;
+    // bin folder is needed because cargo installs in  /folder/bin/binary_name.
+    let orig_binary_path = binaries_folder()?
+        .join(branch)
+        .join("bin")
+        .join(name.to_str());
+
+    // rename the binary to `binary_name-nightly`, to keep things in sync across the board
+    let dst = binaries_folder()?
+        .join(branch)
+        .join("bin")
+        .join(format!("{}-nightly", name.to_str()));
+
+    #[cfg(windows)]
+    let orig_binary_path = orig_binary_path.with_extension("exe");
+    #[cfg(windows)]
+    let dst = dst.with_extension("exe");
+
+    std::fs::rename(&orig_binary_path, &dst)?;
+    install_binary(
+        name.to_str(),
+        branch.to_string(),
+        "nightly",
+        debug,
+        dst,
+        yes,
+    )?;
 
     Ok(())
 }
@@ -260,17 +286,26 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 return Ok(());
             }
 
+            anyhow::ensure!(
+                nightly.is_some() && version.is_some(),
+                "Cannot install from nightly and a release at the same time. Remove the version or the nightly flag"
+            );
+
             match (&name, &nightly) {
                 (BinaryName::Walrus, _) => {
                     std::fs::create_dir_all(&installed_bins_dir.join(network.clone()))?;
                     install_walrus(network, yes).await?;
                 }
-                (BinaryName::Mvr, _) => {
+                (BinaryName::Mvr, nightly) => {
                     std::fs::create_dir_all(&installed_bins_dir.join("standalone"))?;
-                    install_mvr(version, yes).await?;
+                    if let Some(branch) = nightly {
+                        install_from_nightly(&name, branch, debug, yes).await?;
+                    } else {
+                        install_mvr(version, yes).await?;
+                    }
                 }
                 (_, Some(branch)) => {
-                    install_from_nightly(&name.to_string().as_str(), branch, debug, yes).await?;
+                    install_from_nightly(&name, branch, debug, yes).await?;
                 }
                 _ => {
                     install_from_release(&name.to_string().as_str(), &network, version, debug, yes)
@@ -1000,17 +1035,32 @@ fn update_after_install(
                     filename = filename.strip_suffix('-').unwrap_or_default().to_string();
                 }
 
-                println!("Setting {binary}-{version} as default");
-                println!("{}/{}/{}", binaries_folder()?.display(), network, filename);
+                let binary_folder = if version == "nightly" {
+                    binaries_folder()?.join(network.to_string()).join("bin")
+                } else {
+                    binaries_folder()?.join(network.to_string())
+                };
+
+                if !binary_folder.exists() {
+                    std::fs::create_dir_all(&binary_folder)?;
+                }
+
+                println!(
+                    "Installing binary to {}/{}",
+                    binary_folder.display(),
+                    filename
+                );
 
                 #[cfg(target_os = "windows")]
                 {
                     let filename = format!("{}.exe", filename);
                 }
-                let src = binaries_folder()?.join(network.to_string()).join(filename);
+                let src = binary_folder.join(&filename);
                 let dst = default_bin_folder()?.join(binary);
 
-                std::fs::copy(&src, &dst)?;
+                println!("Setting {} as default", &filename);
+                std::fs::copy(&src, &dst)
+                    .map_err(|e| anyhow!("Error copying the binary to the default folder: {e}"))?;
 
                 #[cfg(unix)]
                 {

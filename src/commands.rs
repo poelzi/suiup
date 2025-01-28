@@ -117,6 +117,26 @@ pub enum BinaryName {
     Mvr,
 }
 
+impl BinaryName {
+    pub fn repo_url(&self) -> &str {
+        match self {
+            BinaryName::Mvr => "https://github.com/MystenLabs/mvr",
+            BinaryName::Walrus => "https://github.com/MystenLabs/walrus",
+            _ => "https://github.com/MystenLabs/sui",
+        }
+    }
+
+    pub fn to_str(&self) -> &str {
+        match self {
+            BinaryName::Sui => "sui",
+            BinaryName::SuiBridge => "sui-bridge",
+            BinaryName::SuiFaucet => "sui-faucet",
+            BinaryName::Walrus => "walrus",
+            BinaryName::Mvr => "mvr",
+        }
+    }
+}
+
 impl std::fmt::Display for BinaryName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
