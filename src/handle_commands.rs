@@ -286,10 +286,10 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 return Ok(());
             }
 
-            anyhow::ensure!(
-                nightly.is_some() && version.is_some(),
-                "Cannot install from nightly and a release at the same time. Remove the version or the nightly flag"
-            );
+            if nightly.is_some() && version.is_some() {
+                println!("Cannot install from nightly and a release at the same time. Remove the version or the nightly flag");
+                return Ok(());
+            }
 
             match (&name, &nightly) {
                 (BinaryName::Walrus, _) => {
