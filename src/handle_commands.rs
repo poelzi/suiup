@@ -531,15 +531,26 @@ pub fn handle_show() -> Result<(), Error> {
 }
 
 /// Handles the `update` command
-pub async fn handle_update(binary_name: String, yes: bool) -> Result<(), Error> {
-    if !available_components().contains(&binary_name.as_str()) {
-        bail!("Invalid component name: {}", binary_name);
+pub async fn handle_update(binary_name: Vec<String>, yes: bool) -> Result<(), Error> {
+    if binary_name.is_empty() || binary_name.len() > 2 {
+        bail!("Invalid number of arguments for `update` command");
+    }
+
+    let CommandMetadata { name, version, .. } =
+        parse_component_with_version(&binary_name.join(" "))?;
+
+    if version.is_some() {
+        bail!("Update should be done without a version. Use `suiup install` to specify a version");
+    }
+
+    if !available_components().contains(&name.to_str()) {
+        bail!("Invalid component name: {}", name);
     }
 
     let installed_binaries = InstalledBinaries::new()?;
     let binaries = installed_binaries.binaries();
-    if !binaries.iter().any(|x| x.binary_name == binary_name) {
-        bail!("Binary {binary_name} not found in installed binaries. Use `suiup show` to see installed binaries and `suiup install` to install the binary.")
+    if !binaries.iter().any(|x| x.binary_name == name.to_str()) {
+        bail!("Binary {name} not found in installed binaries. Use `suiup show` to see installed binaries and `suiup install` to install the binary.")
     }
     let binaries_by_network = installed_binaries_grouped_by_network(Some(installed_binaries))?;
 
@@ -548,7 +559,7 @@ pub async fn handle_update(binary_name: String, yes: bool) -> Result<(), Error> 
     for (network, binaries) in &binaries_by_network {
         let last_version = binaries
             .iter()
-            .filter(|x| x.binary_name == binary_name)
+            .filter(|x| x.binary_name == name.to_str())
             .collect::<Vec<_>>();
         if last_version.is_empty() {
             continue;
@@ -568,9 +579,9 @@ pub async fn handle_update(binary_name: String, yes: bool) -> Result<(), Error> 
     // find the last local version of the name binary, for each network
     // then find the last release for each network and compare the versions
 
-    if binary_name == "mvr" {
+    if name == BinaryName::Mvr {
         handle_component(ComponentCommands::Add {
-            components: vec![binary_name.clone()],
+            components: binary_name,
             debug: false,
             nightly: None,
             yes,
@@ -579,9 +590,9 @@ pub async fn handle_update(binary_name: String, yes: bool) -> Result<(), Error> 
         return Ok(());
     }
 
-    if binary_name == "walrus" {
+    if name == BinaryName::Walrus {
         handle_component(ComponentCommands::Add {
-            components: vec![binary_name.clone()],
+            components: binary_name,
             debug: false,
             nightly: None,
             yes,
@@ -596,17 +607,17 @@ pub async fn handle_update(binary_name: String, yes: bool) -> Result<(), Error> 
         let last_release = last_release_for_network(&releases, &n).await?;
         let last_version = last_release.1;
         if v == &last_version {
-            println!("[{n} release] {binary_name} is up to date");
+            println!("[{n} release] {name} is up to date");
         } else {
-            println!("[{n} release] {binary_name} is outdated. Local: {v}, Latest: {last_version}");
+            println!("[{n} release] {name} is outdated. Local: {v}, Latest: {last_version}");
             to_update.push((n, last_version));
         }
     }
 
     for (n, v) in to_update.iter() {
-        println!("Updating {binary_name} to {v} from {n} release");
+        println!("Updating {name} to {v} from {n} release");
         handle_component(ComponentCommands::Add {
-            components: vec![binary_name.clone()],
+            components: binary_name.clone(),
             debug: false,
             nightly: None,
             yes,

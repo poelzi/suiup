@@ -38,8 +38,11 @@ pub(crate) enum Commands {
     Show,
     #[command(about = "Update binary")]
     Update {
-        #[arg(help = "Component to update (e.g. 'sui', 'mvr')")]
-        name: String,
+        #[arg(
+            num_args = 1..=2,
+            help = "Component to update (e.g. 'sui', 'mvr'). By default, it will update the default component version. For updating a specific release or branch, pass in the release name / branch name."
+        )]
+        name: Vec<String>,
         #[arg(short, long, help = "Accept defaults without prompting")]
         yes: bool,
     },

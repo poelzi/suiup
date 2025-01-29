@@ -10,6 +10,7 @@ mod tests {
     #[tokio::test]
     async fn test_install_and_use_binary() -> Result<()> {
         let test_env = TestEnv::new()?;
+        test_env.copy_testnet_releases_to_cache()?;
 
         // Run install command
         let mut cmd = Command::cargo_bin("suiup")?;
@@ -88,6 +89,14 @@ mod tests {
         let mut cmd = Command::new(default_sui_binary);
         cmd.arg("--version");
         cmd.assert().success();
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_default_workflow() -> Result<(), anyhow::Error> {
+        let test_env = TestEnv::new()?;
+        test_env.copy_testnet_releases_to_cache()?;
 
         Ok(())
     }

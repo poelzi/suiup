@@ -61,6 +61,48 @@ impl TestEnv {
             original_env,
         })
     }
+
+    pub fn copy_testnet_releases_to_cache(&self) -> Result<()> {
+        // Create cache directory if it doesn't exist
+        std::fs::create_dir_all(&self.cache_dir)?;
+
+        let testnet_v1_39_3 = "sui-testnet-v1.39.3-macos-arm64.tgz";
+        let testnet_v1_40_1 = "sui-testnet-v1.40.1-macos-arm64.tgz";
+
+        let data_path = PathBuf::new().join("tests").join("data");
+
+        let testnet_v1_39_3_path = data_path.join(testnet_v1_39_3);
+        let testnet_v1_40_1_path = data_path.join(testnet_v1_40_1);
+
+        assert!(
+            testnet_v1_39_3_path.exists(),
+            "Something went wrong, release archives for test data are missing"
+        );
+        assert!(
+            testnet_v1_40_1_path.exists(),
+            "Something went wrong, release archives for test data are missing"
+        );
+
+        let releases_dir = self.cache_dir.join("suiup").join("releases");
+        std::fs::create_dir_all(&releases_dir)?;
+
+        std::fs::copy(
+            testnet_v1_39_3_path,
+            self.cache_dir
+                .join("suiup")
+                .join("releases")
+                .join(testnet_v1_39_3),
+        )?;
+        std::fs::copy(
+            testnet_v1_40_1_path,
+            self.cache_dir
+                .join("suiup")
+                .join("releases")
+                .join(testnet_v1_40_1),
+        )?;
+
+        Ok(())
+    }
 }
 
 impl Drop for TestEnv {
