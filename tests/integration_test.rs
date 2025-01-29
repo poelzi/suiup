@@ -98,6 +98,65 @@ mod tests {
         let test_env = TestEnv::new()?;
         test_env.copy_testnet_releases_to_cache()?;
 
+        // Install 1.39.3
+        let mut cmd = Command::cargo_bin("suiup")?;
+        cmd.arg("install")
+            .arg("sui")
+            .arg("testnet-v1.39.3")
+            .arg("-y")
+            .env("XDG_DATA_HOME", &test_env.data_dir)
+            .env("XDG_CONFIG_HOME", &test_env.config_dir)
+            .env("XDG_CACHE_HOME", &test_env.cache_dir)
+            .env("HOME", &test_env.temp_dir.path());
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("'sui' extracted successfully!"));
+        // Test binary execution
+        let default_sui_binary = test_env.bin_dir.join("sui");
+        let mut cmd = Command::new(&default_sui_binary);
+        cmd.arg("--version");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("1.39.3"));
+        // Install 1.40.1
+        let mut cmd = Command::cargo_bin("suiup")?;
+        cmd.arg("install")
+            .arg("sui")
+            .arg("testnet-v1.40.1")
+            .env("XDG_DATA_HOME", &test_env.data_dir)
+            .env("XDG_CONFIG_HOME", &test_env.config_dir)
+            .env("XDG_CACHE_HOME", &test_env.cache_dir)
+            .env("HOME", &test_env.temp_dir.path());
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("'sui' extracted successfully!"));
+        // Test binary execution
+        let default_sui_binary = test_env.bin_dir.join("sui");
+        let mut cmd = Command::new(&default_sui_binary);
+        cmd.arg("--version");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("1.39.3"));
+
+        // Switch from 1.39.3 to 1.40.1
+        let mut cmd = Command::cargo_bin("suiup")?;
+        cmd.arg("default")
+            .arg("set")
+            .arg("sui")
+            .arg("testnet-v1.40.1")
+            .env("XDG_DATA_HOME", &test_env.data_dir)
+            .env("XDG_CONFIG_HOME", &test_env.config_dir)
+            .env("XDG_CACHE_HOME", &test_env.cache_dir)
+            .env("HOME", &test_env.temp_dir.path());
+
+        cmd.assert().success();
+
+        let mut cmd = Command::new(default_sui_binary);
+        cmd.arg("--version");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("1.40.1"));
+
         Ok(())
     }
 }
