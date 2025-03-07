@@ -28,21 +28,24 @@ mod tests {
     #[cfg(windows)]
     const HOME: &str = "HOME";
 
+    fn suiup_command(args: Vec<&str>, test_env: &TestEnv) -> Command {
+        let mut cmd = Command::cargo_bin("suiup").unwrap();
+        cmd.args(args);
+
+        cmd.env(DATA_HOME, &test_env.data_dir)
+            .env(CONFIG_HOME, &test_env.config_dir)
+            .env(CACHE_HOME, &test_env.cache_dir)
+            .env(HOME, &test_env.temp_dir.path());
+        cmd
+    }
+
     #[tokio::test]
     async fn test_install_and_use_binary() -> Result<()> {
         let test_env = TestEnv::new()?;
         test_env.copy_testnet_releases_to_cache()?;
 
         // Run install command
-        let mut cmd = Command::cargo_bin("suiup")?;
-        cmd.arg("install")
-            .arg("sui")
-            .arg("testnet-v1.39.3")
-            .arg("-y")
-            .env(DATA_HOME, &test_env.data_dir)
-            .env(CONFIG_HOME, &test_env.config_dir)
-            .env(CACHE_HOME, &test_env.cache_dir)
-            .env(HOME, &test_env.temp_dir.path());
+        let mut cmd = suiup_command(vec!["install", "sui", "testnet-v1.39.3", "-y"], &test_env);
 
         cmd.assert()
             .success()
@@ -77,34 +80,23 @@ mod tests {
         test_env.copy_testnet_releases_to_cache()?;
 
         // Run install command
-        let mut cmd = Command::cargo_bin("suiup")?;
-        cmd.arg("component")
-            .arg("add")
-            .arg("mvr")
-            .arg("--debug")
-            .arg("-y")
-            .env(DATA_HOME, &test_env.data_dir)
-            .env(CONFIG_HOME, &test_env.config_dir)
-            .env(CACHE_HOME, &test_env.cache_dir)
-            .env(HOME, &test_env.temp_dir.path());
-
+        let mut cmd = suiup_command(vec!["component", "add", "mvr", "--debug", "-y"], &test_env);
         cmd.assert().success().stdout(predicate::str::contains(
             "Debug flag is only available for the `sui` component",
         ));
 
         // Run install command
-        let mut cmd = Command::cargo_bin("suiup")?;
-        cmd.arg("component")
-            .arg("add")
-            .arg("sui")
-            .arg("testnet-v1.39.3")
-            .arg("--debug")
-            .arg("-y")
-            .env(DATA_HOME, &test_env.data_dir)
-            .env(CONFIG_HOME, &test_env.config_dir)
-            .env(CACHE_HOME, &test_env.cache_dir)
-            .env(HOME, &test_env.temp_dir.path());
-
+        let mut cmd = suiup_command(
+            vec![
+                "component",
+                "add",
+                "sui",
+                "testnet-v1.39.3",
+                "--debug",
+                "-y",
+            ],
+            &test_env,
+        );
         cmd.assert().success().stdout(predicate::str::contains(
             "'sui-debug' extracted successfully!",
         ));
@@ -141,28 +133,11 @@ mod tests {
         let test_env = TestEnv::new()?;
 
         // Install older version
-        let mut cmd = Command::cargo_bin("suiup")?;
-        cmd.arg("install")
-            .arg("mvr")
-            .arg("v0.0.4")
-            .arg("-y")
-            .env(DATA_HOME, &test_env.data_dir)
-            .env(CONFIG_HOME, &test_env.config_dir)
-            .env(CACHE_HOME, &test_env.cache_dir)
-            .env(HOME, &test_env.temp_dir.path());
-
+        let mut cmd = suiup_command(vec!["install", "mvr", "v0.0.4", "-y"], &test_env);
         cmd.assert().success();
 
         // Run update
-        let mut cmd = Command::cargo_bin("suiup")?;
-        cmd.arg("update")
-            .arg("mvr")
-            .arg("-y")
-            .env(DATA_HOME, &test_env.data_dir)
-            .env(CONFIG_HOME, &test_env.config_dir)
-            .env(CACHE_HOME, &test_env.cache_dir)
-            .env(HOME, &test_env.temp_dir.path());
-
+        let mut cmd = suiup_command(vec!["update", "mvr", "-y"], &test_env);
         cmd.assert().success();
 
         // Verify new version exists
@@ -190,15 +165,7 @@ mod tests {
         test_env.copy_testnet_releases_to_cache()?;
 
         // Install 1.39.3
-        let mut cmd = Command::cargo_bin("suiup")?;
-        cmd.arg("install")
-            .arg("sui")
-            .arg("testnet-v1.39.3")
-            .arg("-y")
-            .env(DATA_HOME, &test_env.data_dir)
-            .env(CONFIG_HOME, &test_env.config_dir)
-            .env(CACHE_HOME, &test_env.cache_dir)
-            .env(HOME, &test_env.temp_dir.path());
+        let mut cmd = suiup_command(vec!["install", "sui", "testnet-v1.39.3", "-y"], &test_env);
         cmd.assert()
             .success()
             .stdout(predicate::str::contains("'sui' extracted successfully!"));
@@ -209,15 +176,9 @@ mod tests {
         cmd.assert()
             .success()
             .stdout(predicate::str::contains("1.39.3"));
+
         // Install 1.40.1
-        let mut cmd = Command::cargo_bin("suiup")?;
-        cmd.arg("install")
-            .arg("sui")
-            .arg("testnet-v1.40.1")
-            .env(DATA_HOME, &test_env.data_dir)
-            .env(CONFIG_HOME, &test_env.config_dir)
-            .env(CACHE_HOME, &test_env.cache_dir)
-            .env(HOME, &test_env.temp_dir.path());
+        let mut cmd = suiup_command(vec!["install", "sui", "testnet-v1.40.1", "-y"], &test_env);
         cmd.assert()
             .success()
             .stdout(predicate::str::contains("'sui' extracted successfully!"));
@@ -227,19 +188,10 @@ mod tests {
         cmd.arg("--version");
         cmd.assert()
             .success()
-            .stdout(predicate::str::contains("1.39.3"));
+            .stdout(predicate::str::contains("1.40.1"));
 
         // Switch from 1.39.3 to 1.40.1
-        let mut cmd = Command::cargo_bin("suiup")?;
-        cmd.arg("default")
-            .arg("set")
-            .arg("sui")
-            .arg("testnet-v1.40.1")
-            .env(DATA_HOME, &test_env.data_dir)
-            .env(CONFIG_HOME, &test_env.config_dir)
-            .env(CACHE_HOME, &test_env.cache_dir)
-            .env(HOME, &test_env.temp_dir.path());
-
+        let mut cmd = suiup_command(vec!["default", "set", "sui", "testnet-v1.40.1"], &test_env);
         cmd.assert().success();
 
         let mut cmd = Command::new(&default_sui_binary);
@@ -249,16 +201,7 @@ mod tests {
             .stdout(predicate::str::contains("1.40.1"));
 
         // Switch back from 1.40.1 to 1.39.3
-        let mut cmd = Command::cargo_bin("suiup")?;
-        cmd.arg("default")
-            .arg("set")
-            .arg("sui")
-            .arg("testnet-v1.39.3")
-            .env(DATA_HOME, &test_env.data_dir)
-            .env(CONFIG_HOME, &test_env.config_dir)
-            .env(CACHE_HOME, &test_env.cache_dir)
-            .env(HOME, &test_env.temp_dir.path());
-
+        let mut cmd = suiup_command(vec!["default", "set", "sui", "testnet-v1.39.3"], &test_env);
         cmd.assert().success();
 
         let mut cmd = Command::new(default_sui_binary);
