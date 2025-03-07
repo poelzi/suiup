@@ -133,19 +133,27 @@ async fn install_from_nightly(
     pb.set_message("Compiling...please wait");
 
     let repo_url = name.repo_url();
-    let cmd = Command::new("cargo")
-        .args(&[
-            "install",
-            "--locked",
-            "--force",
-            "--git",
-            repo_url,
-            "--branch",
-            branch,
-            name.to_str(),
-            "--root",
-            binaries_folder()?.join(branch).to_str().unwrap(),
-        ])
+    let binaries_folder = binaries_folder()?;
+    let binaries_folder_branch = binaries_folder.join(branch);
+    let mut args = vec![
+        "install",
+        "--locked",
+        "--force",
+        "--git",
+        repo_url,
+        "--branch",
+        branch,
+        name.to_str(),
+        "--root",
+        binaries_folder_branch.to_str().unwrap(),
+    ];
+    if debug {
+        args.push("--debug");
+    }
+    let mut cmd = Command::new("cargo");
+    cmd.args(&args);
+
+    let cmd = cmd
         .stdout(Stdio::inherit())
         .stderr(Stdio::piped())
         .spawn()?;
@@ -160,14 +168,10 @@ async fn install_from_nightly(
 
     println!("Installation completed successfully!");
     // bin folder is needed because cargo installs in  /folder/bin/binary_name.
-    let orig_binary_path = binaries_folder()?
-        .join(branch)
-        .join("bin")
-        .join(name.to_str());
+    let orig_binary_path = binaries_folder_branch.join("bin").join(name.to_str());
 
     // rename the binary to `binary_name-nightly`, to keep things in sync across the board
-    let dst = binaries_folder()?
-        .join(branch)
+    let dst = binaries_folder_branch
         .join("bin")
         .join(format!("{}-nightly", name.to_str()));
 
@@ -265,7 +269,6 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
         ComponentCommands::Add {
             components,
             nightly,
-            release,
             debug,
             yes,
         } => {
@@ -294,14 +297,12 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 return Ok(());
             }
 
-            if name.to_str() != "sui" && debug {
-                println!("Debug flag is only available for the `sui` component");
-                return Ok(());
+            if name != BinaryName::Sui && debug && nightly.is_none() {
+                bail!("Debug flag is only available for the `sui` binary");
             }
 
             if nightly.is_some() && version.is_some() {
-                println!("Cannot install from nightly and a release at the same time. Remove the version or the nightly flag");
-                return Ok(());
+                bail!("Cannot install from nightly and a release at the same time. Remove the version or the nightly flag");
             }
 
             match (&name, &nightly) {
@@ -596,7 +597,6 @@ pub async fn handle_update(binary_name: Vec<String>, yes: bool) -> Result<(), Er
     if name == BinaryName::Mvr {
         handle_component(ComponentCommands::Add {
             components: binary_name,
-            release: true,
             debug: false,
             nightly: None,
             yes,
@@ -608,7 +608,6 @@ pub async fn handle_update(binary_name: Vec<String>, yes: bool) -> Result<(), Er
     if name == BinaryName::Walrus {
         handle_component(ComponentCommands::Add {
             components: binary_name,
-            release: true,
             debug: false,
             nightly: None,
             yes,
@@ -634,7 +633,6 @@ pub async fn handle_update(binary_name: Vec<String>, yes: bool) -> Result<(), Er
         println!("Updating {name} to {v} from {n} release");
         handle_component(ComponentCommands::Add {
             components: binary_name.clone(),
-            release: true,
             debug: false,
             nightly: None,
             yes,

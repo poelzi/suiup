@@ -29,23 +29,24 @@ pub(crate) enum Commands {
             value_name = "branch",
             default_missing_value = "main",
             num_args = 0..=1,
-            help = "Install from a branch. If none provided, main is used. Note that this requires Rust & cargo to be installed."
+            help = "Install from a branch in release mode (use --debug for debug mode). \
+            If none provided, main is used. Note that this requires Rust & cargo to be installed."
         )]
         nightly: Option<String>,
         #[arg(
             long,
-            help = "Whether to install the debug version of the binary (only available for sui). Default is false."
+            help = "This flag can be used in two ways: 1) to install the debug version of the \
+            binary (only available for sui, default is false; 2) together with `--nightly` \
+            to specify to install from branch in debug mode!"
         )]
         debug: bool,
-        #[arg(
-            long,
-            help = "Whether to compile in release mode. Only available with --nightly",
-            requires = "nightly",
-            conflicts_with = "debug"
-        )]
-        release: bool,
         #[arg(short, long, help = "Accept defaults without prompting")]
         yes: bool,
+    },
+    #[command(about = "Remove one or more binaries")]
+    Remove {
+        #[arg(value_enum)]
+        binary: BinaryName,
     },
     #[command(about = "List available binaries to install")]
     List,
@@ -55,7 +56,8 @@ pub(crate) enum Commands {
     Update {
         #[arg(
             num_args = 1..=2,
-            help = "Binary to update (e.g. 'sui', 'mvr'). By default, it will update the default binary version. For updating a specific release or branch, pass in the release name / branch name."
+            help = "Binary to update (e.g. 'sui', 'mvr'). By default, it will update the default \
+            binary version. For updating a specific release or branch, pass in the release name / branch name."
         )]
         name: Vec<String>,
         #[arg(short, long, help = "Accept defaults without prompting")]
@@ -93,15 +95,9 @@ pub(crate) enum ComponentCommands {
             value_name = "branch",
             default_missing_value = "main",
             num_args = 0..=1,
-            help = "Install from a branch. If none provided, main is used. Note that this requires Rust & cargo to be installed."
+            help = "Install from a branch in release mode. If none provided, main is used. Note that this requires Rust & cargo to be installed."
         )]
         nightly: Option<String>,
-        #[arg(
-            long,
-            help = "Whether to compile in release mode. Only available with --nightly",
-            requires = "nightly"
-        )]
-        release: bool,
         #[arg(short, long, help = "Accept defaults without prompting")]
         yes: bool,
     },

@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::env;
+use std::path::PathBuf;
+
+use anyhow::Error;
+use clap::CommandFactory;
 use clap::Parser;
+
 use handle_commands::initialize;
 use handle_commands::{handle_component, handle_default, handle_show, handle_update, handle_which};
-
-use anyhow::anyhow;
-use anyhow::Error;
 
 mod commands;
 mod handle_commands;
@@ -14,10 +17,6 @@ mod mvr;
 mod types;
 mod walrus;
 use commands::{Commands, ComponentCommands, Suiup};
-
-use clap::CommandFactory;
-use std::env;
-use std::path::PathBuf;
 
 const GITHUB_REPO: &str = "MystenLabs/sui";
 const RELEASES_ARCHIVES_FOLDER: &str = "releases";
@@ -155,18 +154,19 @@ async fn main() -> Result<(), Error> {
         Commands::Install {
             components,
             nightly,
-            release,
             debug,
             yes,
         } => {
             handle_component(ComponentCommands::Add {
                 components,
                 nightly,
-                release,
                 debug,
                 yes,
             })
             .await?
+        }
+        Commands::Remove { binary } => {
+            handle_component(ComponentCommands::Remove { binary }).await?
         }
         Commands::List => handle_component(ComponentCommands::List).await?,
         Commands::Show => handle_show()?,

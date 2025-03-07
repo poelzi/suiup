@@ -50,7 +50,7 @@ mod tests {
         let result = parse_component_with_version("random");
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Invalid component name: random".to_string()
+            "Invalid binary name: random".to_string()
         );
 
         Ok(())

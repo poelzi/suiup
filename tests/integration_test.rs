@@ -40,6 +40,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_install_flags() -> Result<()> {
+        let test_env = TestEnv::new()?;
+
+        // NOT OK: nightly + version specified
+        let mut cmd = suiup_command(
+            vec!["install", "sui", "testnet-v1.40.1", "--nightly"],
+            &test_env,
+        );
+        cmd.assert().failure().stderr(predicate::str::contains(
+            "Error: Cannot install from nightly and a release at the same time",
+        ));
+
+        // NOT OK: !sui + debug
+        let mut cmd = suiup_command(vec!["install", "mvr", "--debug"], &test_env);
+        cmd.assert().failure().stderr(predicate::str::contains(
+            "Error: Debug flag is only available for the `sui` binary",
+        ));
+
+        // OK: nightly + debug
+        let mut cmd = suiup_command(vec!["install", "mvr", "--nightly", "--debug"], &test_env);
+        cmd.assert().success();
+
+        // OK: nightly
+        let mut cmd = suiup_command(vec!["install", "mvr", "--nightly"], &test_env);
+        cmd.assert().success();
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_install_and_use_binary() -> Result<()> {
         let test_env = TestEnv::new()?;
         test_env.copy_testnet_releases_to_cache()?;
@@ -81,8 +111,8 @@ mod tests {
 
         // Run install command
         let mut cmd = suiup_command(vec!["install", "mvr", "--debug", "-y"], &test_env);
-        cmd.assert().success().stdout(predicate::str::contains(
-            "Debug flag is only available for the `sui` component",
+        cmd.assert().failure().stderr(predicate::str::contains(
+            "Error: Debug flag is only available for the `sui` binary",
         ));
 
         // Run install command
