@@ -38,7 +38,6 @@ use crate::commands::DefaultCommands;
 use crate::mvr;
 use crate::types::Binaries;
 use crate::types::BinaryVersion;
-use crate::types::DefaultBinaries;
 use crate::types::InstalledBinaries;
 use crate::types::Release;
 use crate::types::Version;
@@ -265,8 +264,9 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
         }
         ComponentCommands::Add {
             components,
-            debug,
             nightly,
+            release,
+            debug,
             yes,
         } => {
             if components.is_empty() {
@@ -596,6 +596,7 @@ pub async fn handle_update(binary_name: Vec<String>, yes: bool) -> Result<(), Er
     if name == BinaryName::Mvr {
         handle_component(ComponentCommands::Add {
             components: binary_name,
+            release: true,
             debug: false,
             nightly: None,
             yes,
@@ -607,6 +608,7 @@ pub async fn handle_update(binary_name: Vec<String>, yes: bool) -> Result<(), Er
     if name == BinaryName::Walrus {
         handle_component(ComponentCommands::Add {
             components: binary_name,
+            release: true,
             debug: false,
             nightly: None,
             yes,
@@ -632,6 +634,7 @@ pub async fn handle_update(binary_name: Vec<String>, yes: bool) -> Result<(), Er
         println!("Updating {name} to {v} from {n} release");
         handle_component(ComponentCommands::Add {
             components: binary_name.clone(),
+            release: true,
             debug: false,
             nightly: None,
             yes,

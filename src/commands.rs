@@ -34,6 +34,18 @@ pub(crate) enum Commands {
             help = "Install from a branch. If none provided, main is used. Note that this requires Rust & cargo to be installed."
         )]
         nightly: Option<String>,
+        #[arg(
+            long,
+            help = "Whether to install the debug version of the component (only available for sui). Default is false."
+        )]
+        debug: bool,
+        #[arg(
+            long,
+            help = "Whether to compile in release mode. Only available with --nightly",
+            requires = "nightly",
+            conflicts_with = "debug"
+        )]
+        release: bool,
         #[arg(short, long, help = "Accept defaults without prompting")]
         yes: bool,
     },
@@ -83,6 +95,12 @@ pub(crate) enum ComponentCommands {
             help = "Install from a branch. If none provided, main is used. Note that this requires Rust & cargo to be installed."
         )]
         nightly: Option<String>,
+        #[arg(
+            long,
+            help = "Whether to compile in release mode. Only available with --nightly",
+            requires = "nightly"
+        )]
+        release: bool,
         #[arg(short, long, help = "Accept defaults without prompting")]
         yes: bool,
     },

@@ -156,12 +156,15 @@ async fn main() -> Result<(), Error> {
         Commands::Install {
             components,
             nightly,
+            release,
+            debug,
             yes,
         } => {
             handle_component(ComponentCommands::Add {
                 components,
-                debug: false,
                 nightly,
+                release,
+                debug,
                 yes,
             })
             .await?
