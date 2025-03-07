@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 pub fn get_binary_dir() -> PathBuf {
     let data_dir = get_data_dir();
     data_dir.join("binaries")

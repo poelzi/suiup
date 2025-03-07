@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::handle_commands::{binaries_folder, detect_os_arch, download_file};
 use anyhow::{anyhow, Error};
 use reqwest::Client;
