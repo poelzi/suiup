@@ -291,6 +291,11 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                 return Ok(());
             }
 
+            if name.to_str() != "sui" && debug {
+                println!("Debug flag is only available for the `sui` component");
+                return Ok(());
+            }
+
             if nightly.is_some() && version.is_some() {
                 println!("Cannot install from nightly and a release at the same time. Remove the version or the nightly flag");
                 return Ok(());

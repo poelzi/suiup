@@ -7,6 +7,24 @@ mod tests {
     use assert_cmd::Command;
     use predicates::prelude::*;
 
+    #[cfg(not(windows))]
+    const DATA_HOME: &str = "XDG_DATA_HOME";
+    #[cfg(not(windows))]
+    const CONFIG_HOME: &str = "XDG_CONFIG_HOME";
+    #[cfg(not(windows))]
+    const CACHE_HOME: &str = "XDG_CACHE_HOME";
+    #[cfg(not(windows))]
+    const HOME: &str = "HOME";
+
+    #[cfg(windows)]
+    const DATA_HOME: &str = "XDG_DATA_HOME";
+    #[cfg(windows)]
+    const CONFIG_HOME: &str = "XDG_CONFIG_HOME";
+    #[cfg(windows)]
+    const CACHE_HOME: &str = "XDG_CACHE_HOME";
+    #[cfg(windows)]
+    const HOME: &str = "HOME";
+
     #[tokio::test]
     async fn test_install_and_use_binary() -> Result<()> {
         let test_env = TestEnv::new()?;
@@ -18,10 +36,10 @@ mod tests {
             .arg("sui")
             .arg("testnet-v1.39.3")
             .arg("-y")
-            .env("XDG_DATA_HOME", &test_env.data_dir)
-            .env("XDG_CONFIG_HOME", &test_env.config_dir)
-            .env("XDG_CACHE_HOME", &test_env.cache_dir)
-            .env("HOME", &test_env.temp_dir.path());
+            .env(DATA_HOME, &test_env.data_dir)
+            .env(CONFIG_HOME, &test_env.config_dir)
+            .env(CACHE_HOME, &test_env.cache_dir)
+            .env(HOME, &test_env.temp_dir.path());
 
         cmd.assert()
             .success()
@@ -46,6 +64,76 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_install_nightly() -> Result<()> {
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_install_debug() -> Result<()> {
+        let test_env = TestEnv::new()?;
+        test_env.copy_testnet_releases_to_cache()?;
+
+        // Run install command
+        let mut cmd = Command::cargo_bin("suiup")?;
+        cmd.arg("component")
+            .arg("add")
+            .arg("mvr")
+            .arg("--debug")
+            .arg("-y")
+            .env(DATA_HOME, &test_env.data_dir)
+            .env(CONFIG_HOME, &test_env.config_dir)
+            .env(CACHE_HOME, &test_env.cache_dir)
+            .env(HOME, &test_env.temp_dir.path());
+
+        cmd.assert().success().stdout(predicate::str::contains(
+            "Debug flag is only available for the `sui` component",
+        ));
+
+        // Run install command
+        let mut cmd = Command::cargo_bin("suiup")?;
+        cmd.arg("component")
+            .arg("add")
+            .arg("sui")
+            .arg("testnet-v1.39.3")
+            .arg("--debug")
+            .arg("-y")
+            .env(DATA_HOME, &test_env.data_dir)
+            .env(CONFIG_HOME, &test_env.config_dir)
+            .env(CACHE_HOME, &test_env.cache_dir)
+            .env(HOME, &test_env.temp_dir.path());
+
+        cmd.assert().success().stdout(predicate::str::contains(
+            "'sui-debug' extracted successfully!",
+        ));
+
+        // Verify binary exists in correct location
+        let binary_path = test_env
+            .data_dir
+            .join("suiup/binaries/testnet/sui-debug-v1.39.3");
+        assert!(binary_path.exists());
+
+        // Verify default binary exists
+        let default_sui_binary = test_env.bin_dir.join("sui");
+        assert!(default_sui_binary.exists());
+
+        // Test binary execution
+        let mut cmd = Command::new(default_sui_binary);
+        cmd.arg("--version");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("1.39.3"));
+
+        let mut cmd = Command::cargo_bin("suiup")?;
+        cmd.arg("default").arg("get");
+        cmd.assert().success().stdout(predicate::str::contains(
+            "[testnet release]
+    sui-v1.39.3 (debug build)",
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_update_workflow() -> Result<()> {
         let test_env = TestEnv::new()?;
 
@@ -55,10 +143,10 @@ mod tests {
             .arg("mvr")
             .arg("v0.0.4")
             .arg("-y")
-            .env("XDG_DATA_HOME", &test_env.data_dir)
-            .env("XDG_CONFIG_HOME", &test_env.config_dir)
-            .env("XDG_CACHE_HOME", &test_env.cache_dir)
-            .env("HOME", &test_env.temp_dir.path());
+            .env(DATA_HOME, &test_env.data_dir)
+            .env(CONFIG_HOME, &test_env.config_dir)
+            .env(CACHE_HOME, &test_env.cache_dir)
+            .env(HOME, &test_env.temp_dir.path());
 
         cmd.assert().success();
 
@@ -67,10 +155,10 @@ mod tests {
         cmd.arg("update")
             .arg("mvr")
             .arg("-y")
-            .env("XDG_DATA_HOME", &test_env.data_dir)
-            .env("XDG_CONFIG_HOME", &test_env.config_dir)
-            .env("XDG_CACHE_HOME", &test_env.cache_dir)
-            .env("HOME", &test_env.temp_dir.path());
+            .env(DATA_HOME, &test_env.data_dir)
+            .env(CONFIG_HOME, &test_env.config_dir)
+            .env(CACHE_HOME, &test_env.cache_dir)
+            .env(HOME, &test_env.temp_dir.path());
 
         cmd.assert().success();
 
@@ -104,10 +192,10 @@ mod tests {
             .arg("sui")
             .arg("testnet-v1.39.3")
             .arg("-y")
-            .env("XDG_DATA_HOME", &test_env.data_dir)
-            .env("XDG_CONFIG_HOME", &test_env.config_dir)
-            .env("XDG_CACHE_HOME", &test_env.cache_dir)
-            .env("HOME", &test_env.temp_dir.path());
+            .env(DATA_HOME, &test_env.data_dir)
+            .env(CONFIG_HOME, &test_env.config_dir)
+            .env(CACHE_HOME, &test_env.cache_dir)
+            .env(HOME, &test_env.temp_dir.path());
         cmd.assert()
             .success()
             .stdout(predicate::str::contains("'sui' extracted successfully!"));
@@ -123,10 +211,10 @@ mod tests {
         cmd.arg("install")
             .arg("sui")
             .arg("testnet-v1.40.1")
-            .env("XDG_DATA_HOME", &test_env.data_dir)
-            .env("XDG_CONFIG_HOME", &test_env.config_dir)
-            .env("XDG_CACHE_HOME", &test_env.cache_dir)
-            .env("HOME", &test_env.temp_dir.path());
+            .env(DATA_HOME, &test_env.data_dir)
+            .env(CONFIG_HOME, &test_env.config_dir)
+            .env(CACHE_HOME, &test_env.cache_dir)
+            .env(HOME, &test_env.temp_dir.path());
         cmd.assert()
             .success()
             .stdout(predicate::str::contains("'sui' extracted successfully!"));
@@ -144,10 +232,10 @@ mod tests {
             .arg("set")
             .arg("sui")
             .arg("testnet-v1.40.1")
-            .env("XDG_DATA_HOME", &test_env.data_dir)
-            .env("XDG_CONFIG_HOME", &test_env.config_dir)
-            .env("XDG_CACHE_HOME", &test_env.cache_dir)
-            .env("HOME", &test_env.temp_dir.path());
+            .env(DATA_HOME, &test_env.data_dir)
+            .env(CONFIG_HOME, &test_env.config_dir)
+            .env(CACHE_HOME, &test_env.cache_dir)
+            .env(HOME, &test_env.temp_dir.path());
 
         cmd.assert().success();
 
@@ -163,10 +251,10 @@ mod tests {
             .arg("set")
             .arg("sui")
             .arg("testnet-v1.39.3")
-            .env("XDG_DATA_HOME", &test_env.data_dir)
-            .env("XDG_CONFIG_HOME", &test_env.config_dir)
-            .env("XDG_CACHE_HOME", &test_env.cache_dir)
-            .env("HOME", &test_env.temp_dir.path());
+            .env(DATA_HOME, &test_env.data_dir)
+            .env(CONFIG_HOME, &test_env.config_dir)
+            .env(CACHE_HOME, &test_env.cache_dir)
+            .env(HOME, &test_env.temp_dir.path());
 
         cmd.assert().success();
 
