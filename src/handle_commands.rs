@@ -261,7 +261,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
     match cmd {
         ComponentCommands::List => {
             let components = available_components();
-            println!("Available components:");
+            println!("Available binaries to install:");
             for component in components {
                 println!(" - {}", component);
             }
