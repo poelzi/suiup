@@ -151,7 +151,6 @@ async fn main() -> Result<(), Error> {
     let args = Suiup::parse();
 
     match args.command {
-        Commands::Component(cmd) => handle_component(cmd).await.map_err(|e| anyhow!("{e}"))?,
         Commands::Default(cmd) => handle_default(cmd)?,
         Commands::Install {
             components,
@@ -169,6 +168,7 @@ async fn main() -> Result<(), Error> {
             })
             .await?
         }
+        Commands::List => handle_component(ComponentCommands::List).await?,
         Commands::Show => handle_show()?,
         Commands::Update { name, yes } => handle_update(name, yes).await?,
         Commands::Which => handle_which()?,

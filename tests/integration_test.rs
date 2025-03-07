@@ -80,21 +80,14 @@ mod tests {
         test_env.copy_testnet_releases_to_cache()?;
 
         // Run install command
-        let mut cmd = suiup_command(vec!["component", "add", "mvr", "--debug", "-y"], &test_env);
+        let mut cmd = suiup_command(vec!["install", "mvr", "--debug", "-y"], &test_env);
         cmd.assert().success().stdout(predicate::str::contains(
             "Debug flag is only available for the `sui` component",
         ));
 
         // Run install command
         let mut cmd = suiup_command(
-            vec![
-                "component",
-                "add",
-                "sui",
-                "testnet-v1.39.3",
-                "--debug",
-                "-y",
-            ],
+            vec!["install", "sui", "testnet-v1.39.3", "--debug", "-y"],
             &test_env,
         );
         cmd.assert().success().stdout(predicate::str::contains(

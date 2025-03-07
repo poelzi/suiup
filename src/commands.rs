@@ -14,15 +14,13 @@ pub(crate) struct Suiup {
 
 #[derive(Subcommand)]
 pub(crate) enum Commands {
-    #[command(subcommand, about = "List, add, or remove components")]
-    Component(ComponentCommands),
-    #[command(subcommand, about = "Get or set the default Sui components' version")]
+    #[command(subcommand, about = "Get or set the default tool version")]
     Default(DefaultCommands),
-    #[command(about = "Install one or more components")]
+    #[command(about = "Install one or more binaries")]
     Install {
         #[arg(
             num_args = 1..=2,
-            help = "Component to install with optional version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
+            help = "Binary to install with optional version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
         )]
         components: Vec<String>,
         #[arg(
@@ -36,7 +34,7 @@ pub(crate) enum Commands {
         nightly: Option<String>,
         #[arg(
             long,
-            help = "Whether to install the debug version of the component (only available for sui). Default is false."
+            help = "Whether to install the debug version of the binary (only available for sui). Default is false."
         )]
         debug: bool,
         #[arg(
@@ -49,13 +47,15 @@ pub(crate) enum Commands {
         #[arg(short, long, help = "Accept defaults without prompting")]
         yes: bool,
     },
+    #[command(about = "List available binaries to install")]
+    List,
     #[command(about = "Show installed and active Sui binaries")]
     Show,
     #[command(about = "Update binary")]
     Update {
         #[arg(
             num_args = 1..=2,
-            help = "Component to update (e.g. 'sui', 'mvr'). By default, it will update the default component version. For updating a specific release or branch, pass in the release name / branch name."
+            help = "Binary to update (e.g. 'sui', 'mvr'). By default, it will update the default binary version. For updating a specific release or branch, pass in the release name / branch name."
         )]
         name: Vec<String>,
         #[arg(short, long, help = "Accept defaults without prompting")]
@@ -63,7 +63,8 @@ pub(crate) enum Commands {
     },
     #[command(about = "Show the path where default binaries are installed")]
     Which,
-    #[command(about = "Generate shell completion scripts")]
+    // #[command(about = "Generate shell completion scripts", skip)]
+    #[command(skip)]
     Completion {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
@@ -72,18 +73,18 @@ pub(crate) enum Commands {
 
 #[derive(Subcommand)]
 pub(crate) enum ComponentCommands {
-    #[command(about = "List available components")]
+    #[command(about = "List available binaries to install")]
     List,
-    #[command(about = "Add one or more components")]
+    #[command(about = "Add one or more binaries")]
     Add {
         #[arg(
             num_args = 1..=2,
-            help = "Component to install with optional version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
+            help = "Binary to install with optional version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
         )]
         components: Vec<String>,
         #[arg(
             long,
-            help = "Whether to install the debug version of the component (only available for sui). Default is false."
+            help = "Whether to install the debug version of the binary (only available for sui). Default is false."
         )]
         debug: bool,
         #[arg(
@@ -120,12 +121,12 @@ pub(crate) enum DefaultCommands {
     #[command(about = "Set the default Sui CLI version")]
     Set {
         #[arg(
-            help = "Component to be set as default and the version (e.g. 'sui testnet-v1.39.3', 'sui testnet' -- this will use an installed binary that has the higest testnet version)"
+            help = "Binary to be set as default and the version (e.g. 'sui testnet-v1.39.3', 'sui testnet' -- this will use an installed binary that has the higest testnet version)"
         )]
         name: Vec<String>,
         #[arg(
             long,
-            help = "Whether to set the debug version of the component as default (only available for sui)."
+            help = "Whether to set the debug version of the binary as default (only available for sui)."
         )]
         debug: bool,
     },
@@ -195,7 +196,7 @@ impl std::str::FromStr for BinaryName {
             "sui-faucet" => Ok(BinaryName::SuiFaucet),
             "walrus" => Ok(BinaryName::Walrus),
             "mvr" => Ok(BinaryName::Mvr),
-            _ => Err(format!("Unknown component: {}", s)),
+            _ => Err(format!("Unknown binary: {}", s)),
         }
     }
 }
@@ -206,7 +207,7 @@ pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::
     match parts.len() {
         1 => {
             let component = BinaryName::from_str(parts[0], true)
-                .map_err(|_| anyhow!("Invalid component name: {}", parts[0]))?;
+                .map_err(|_| anyhow!("Invalid binary name: {}", parts[0]))?;
             let (network, version) = parse_version_spec(None)?;
             let component_metadata = CommandMetadata {
                 name: component,
@@ -217,7 +218,7 @@ pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::
         }
         2 => {
             let component = BinaryName::from_str(parts[0], true)
-                .map_err(|_| anyhow!("Invalid component name: {}", parts[0]))?;
+                .map_err(|_| anyhow!("Invalid binary name: {}", parts[0]))?;
             let (network, version) = parse_version_spec(Some(parts[1].to_string()))?;
             let component_metadata = CommandMetadata {
                 name: component,
@@ -226,7 +227,7 @@ pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::
             };
             Ok(component_metadata)
         }
-        _ => bail!("Invalid format. Use 'component' or 'component version'".to_string()),
+        _ => bail!("Invalid format. Use 'binary' or 'binary version'".to_string()),
     }
 }
 
