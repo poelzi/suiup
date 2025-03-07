@@ -18,6 +18,10 @@ use std::path::PathBuf;
 
 const GITHUB_REPO: &str = "MystenLabs/sui";
 const RELEASES_ARCHIVES_FOLDER: &str = "releases";
+const XDG_DATA_HOME: &str = "XDG_DATA_HOME";
+const XDG_CONFIG_HOME: &str = "XDG_CONFIG_HOME";
+const XDG_CACHE_HOME: &str = "XDG_CACHE_HOME";
+const HOME: &str = "HOME";
 
 fn get_data_home() -> PathBuf {
     #[cfg(windows)]
@@ -35,10 +39,10 @@ fn get_data_home() -> PathBuf {
 
     #[cfg(not(windows))]
     {
-        env::var_os("XDG_DATA_HOME")
+        env::var_os(XDG_DATA_HOME)
             .map(PathBuf::from)
             .unwrap_or_else(|| {
-                let mut home = PathBuf::from(env::var_os("HOME").expect("HOME not set"));
+                let mut home = PathBuf::from(env::var_os(HOME).expect("HOME not set"));
                 home.push(".local");
                 home.push("share");
                 home
@@ -62,7 +66,7 @@ fn get_config_home() -> PathBuf {
 
     #[cfg(not(windows))]
     {
-        env::var_os("XDG_CONFIG_HOME")
+        env::var_os(XDG_CONFIG_HOME)
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 let mut home = PathBuf::from(env::var_os("HOME").expect("HOME not set"));
@@ -86,7 +90,7 @@ fn get_cache_home() -> PathBuf {
 
     #[cfg(not(windows))]
     {
-        env::var_os("XDG_CACHE_HOME")
+        env::var_os(XDG_CACHE_HOME)
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 let mut home = PathBuf::from(env::var_os("HOME").expect("HOME not set"));
@@ -125,7 +129,7 @@ fn get_default_bin_dir() -> PathBuf {
 
     #[cfg(not(windows))]
     {
-        let mut path = PathBuf::from(env::var_os("HOME").expect("HOME not set"));
+        let mut path = PathBuf::from(env::var_os(HOME).expect("HOME not set"));
         path.push(".local");
         path.push("bin");
         path

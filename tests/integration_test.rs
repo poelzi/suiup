@@ -151,11 +151,30 @@ mod tests {
 
         cmd.assert().success();
 
-        let mut cmd = Command::new(default_sui_binary);
+        let mut cmd = Command::new(&default_sui_binary);
         cmd.arg("--version");
         cmd.assert()
             .success()
             .stdout(predicate::str::contains("1.40.1"));
+
+        // Switch back from 1.40.1 to 1.39.3
+        let mut cmd = Command::cargo_bin("suiup")?;
+        cmd.arg("default")
+            .arg("set")
+            .arg("sui")
+            .arg("testnet-v1.39.3")
+            .env("XDG_DATA_HOME", &test_env.data_dir)
+            .env("XDG_CONFIG_HOME", &test_env.config_dir)
+            .env("XDG_CACHE_HOME", &test_env.cache_dir)
+            .env("HOME", &test_env.temp_dir.path());
+
+        cmd.assert().success();
+
+        let mut cmd = Command::new(default_sui_binary);
+        cmd.arg("--version");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("1.39.3"));
 
         Ok(())
     }

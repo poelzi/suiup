@@ -125,6 +125,13 @@ pub enum BinaryName {
     Mvr,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct CommandMetadata {
+    pub name: BinaryName,
+    pub network: String,
+    pub version: Option<String>,
+}
+
 impl BinaryName {
     pub fn repo_url(&self) -> &str {
         match self {
@@ -157,11 +164,19 @@ impl std::fmt::Display for BinaryName {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct CommandMetadata {
-    pub name: BinaryName,
-    pub network: String,
-    pub version: Option<String>,
+impl std::str::FromStr for BinaryName {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "sui" => Ok(BinaryName::Sui),
+            "sui-bridge" => Ok(BinaryName::SuiBridge),
+            "sui-faucet" => Ok(BinaryName::SuiFaucet),
+            "walrus" => Ok(BinaryName::Walrus),
+            "mvr" => Ok(BinaryName::Mvr),
+            _ => Err(format!("Unknown component: {}", s)),
+        }
+    }
 }
 
 pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::Error> {
@@ -210,21 +225,6 @@ pub fn parse_version_spec(spec: Option<String>) -> Result<(String, Option<String
                 // Assume it's a version for testnet
                 Ok(("testnet".to_string(), Some(spec)))
             }
-        }
-    }
-}
-
-impl std::str::FromStr for BinaryName {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "sui" => Ok(BinaryName::Sui),
-            "sui-bridge" => Ok(BinaryName::SuiBridge),
-            "sui-faucet" => Ok(BinaryName::SuiFaucet),
-            "walrus" => Ok(BinaryName::Walrus),
-            "mvr" => Ok(BinaryName::Mvr),
-            _ => Err(format!("Unknown component: {}", s)),
         }
     }
 }

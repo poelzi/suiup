@@ -35,6 +35,7 @@ use crate::commands::DefaultCommands;
 use crate::mvr;
 use crate::types::Binaries;
 use crate::types::BinaryVersion;
+use crate::types::DefaultBinaries;
 use crate::types::InstalledBinaries;
 use crate::types::Release;
 use crate::types::Version;
@@ -47,6 +48,7 @@ use std::cmp::min;
 use std::env;
 
 pub const WALRUS_BASE_URL: &str = "https://storage.googleapis.com/mysten-walrus-binaries";
+
 fn available_components() -> &'static [&'static str] {
     &["sui", "sui-bridge", "sui-faucet", "walrus", "mvr"]
 }
@@ -108,6 +110,8 @@ async fn install_from_release(
     Ok(())
 }
 
+/// Compile the code from the main branch or the specified branch.
+/// It checks if cargo is installed.
 async fn install_from_nightly(
     name: &BinaryName,
     branch: &str,
@@ -212,6 +216,7 @@ async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
     Ok(())
 }
 
+/// Install MVR CLI
 async fn install_mvr(version: Option<String>, yes: bool) -> Result<(), Error> {
     let network = "standalone".to_string();
     let binary_name = BinaryName::Mvr.to_string();
@@ -396,6 +401,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
     println!("Handling default command: {:?}", cmd);
     match cmd {
         DefaultCommands::Get => {
+            // let default_binaries = DefaultBinaries::load()?;
             let default = std::fs::read_to_string(default_file_path()?)?;
             let default: HashMap<String, (String, Version, bool)> = serde_json::from_str(&default)?;
             let default_binaries = Binaries::from(default);
@@ -1150,7 +1156,7 @@ fn check_if_binaries_exist(binary: &str, network: String, version: &str) -> Resu
 }
 
 /// Returns the path to the default version file. The file is created if it does not exist.
-fn default_file_path() -> Result<PathBuf, Error> {
+pub fn default_file_path() -> Result<PathBuf, Error> {
     let path = get_config_file("default_version.json");
     if !path.exists() {
         let mut file = File::create(&path)?;
