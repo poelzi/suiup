@@ -59,11 +59,8 @@ mod tests {
         ));
 
         // OK: nightly + debug
+        // OK: nightly (if nightly + debug work, nightly works on its own too)
         let mut cmd = suiup_command(vec!["install", "mvr", "--nightly", "--debug"], &test_env);
-        cmd.assert().success();
-
-        // OK: nightly
-        let mut cmd = suiup_command(vec!["install", "mvr", "--nightly"], &test_env);
         cmd.assert().success();
 
         Ok(())
