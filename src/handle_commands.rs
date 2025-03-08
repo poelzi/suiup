@@ -680,6 +680,8 @@ pub(crate) async fn release_list() -> Result<(Vec<Release>, Option<String>), any
         .get(ETAG)
         .and_then(|v| v.to_str().ok())
         .map(String::from);
+    let response = response.error_for_status()?;
+    println!("Response: {:?}", response);
     let releases: Vec<Release> = response.json().await?;
     save_release_list(&releases, etag.clone())?;
 
@@ -976,16 +978,6 @@ pub(crate) fn extract_version_from_release(release: &str) -> Result<String, Erro
 
     Ok(captures.get(0).unwrap().as_str().to_string())
 }
-
-// /// Returns the path to the Suiup configuration folder. The folder is created if it does not exist.
-// fn config_folder_or_create() -> Result<PathBuf, anyhow::Error> {
-//     let path = get_suiup_config_dir();
-//     if !path.is_dir() {
-//         std::fs::create_dir_all(path.as_path())
-//             .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
-//     }
-//     Ok(path)
-// }
 
 /// Returns the path to the default binaries folder. The folder is created if it does not exist.
 fn default_bin_folder() -> Result<PathBuf, anyhow::Error> {
