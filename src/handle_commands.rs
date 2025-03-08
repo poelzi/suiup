@@ -37,19 +37,15 @@ use crate::commands::CommandMetadata;
 use crate::commands::ComponentCommands;
 use crate::commands::DefaultCommands;
 use crate::mvr;
+use crate::paths::*;
 use crate::types::Binaries;
 use crate::types::BinaryVersion;
 use crate::types::InstalledBinaries;
 use crate::types::Release;
 use crate::types::Version;
-use crate::{
-    get_config_file, get_default_bin_dir, get_suiup_cache_dir, get_suiup_config_dir,
-    get_suiup_data_dir, GITHUB_REPO, RELEASES_ARCHIVES_FOLDER,
-};
-// use clap_complete::Shell;
+use crate::{GITHUB_REPO, RELEASES_ARCHIVES_FOLDER};
 use std::cmp::min;
 use std::env;
-use tracing::info;
 
 pub const WALRUS_BASE_URL: &str = "https://storage.googleapis.com/mysten-walrus-binaries";
 
