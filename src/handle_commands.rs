@@ -48,6 +48,7 @@ use crate::{
 // use clap_complete::Shell;
 use std::cmp::min;
 use std::env;
+use tracing::info;
 
 pub const WALRUS_BASE_URL: &str = "https://storage.googleapis.com/mysten-walrus-binaries";
 
@@ -97,7 +98,7 @@ async fn install_from_release(
     };
 
     if !check_if_binaries_exist(&binary_name, network.to_string(), &version)? {
-        println!("Adding component: {name}-{version}");
+        println!("Adding binary: {name}-{version}");
         extract_component(&binary_name, network.to_string(), &filename)?;
 
         let binary_filename = format!("{}-{}", name, version);
@@ -107,7 +108,7 @@ async fn install_from_release(
         let binary_path = binaries_folder()?.join(network).join(binary_filename);
         install_binary(name, network.to_string(), &version, debug, binary_path, yes)?;
     } else {
-        println!("Component {name}-{version} already installed");
+        println!("Binary {name}-{version} already installed");
     }
     Ok(())
 }
@@ -217,7 +218,7 @@ async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
 
         install_binary(filename, network, "latest", false, binaries_folder()?, yes)?;
     } else {
-        println!("Component walrus-latest already installed");
+        println!("Binary walrus-latest already installed");
     }
     Ok(())
 }
@@ -250,7 +251,7 @@ async fn install_mvr(version: Option<String>, yes: bool) -> Result<(), Error> {
         )?;
     } else {
         let version = version.unwrap_or_default();
-        println!("Component mvr-{version} already installed. Use `suiup default set mvr {version}` to set the default version to the specified one.");
+        println!("Binary mvr-{version} already installed. Use `suiup default set mvr {version}` to set the default version to the specified one.");
     }
 
     Ok(())
@@ -293,7 +294,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             let version = component.version;
             let available_components = available_components();
             if !available_components.contains(&name.to_string().as_str()) {
-                println!("Component {} does not exist", name);
+                println!("Binary {} does not exist", name);
                 return Ok(());
             }
 
@@ -661,7 +662,9 @@ pub(crate) async fn release_list() -> Result<(Vec<Release>, Option<String>), any
         request = request.header(IF_NONE_MATCH, etag);
     }
 
+    println!("Requesting releases from: {}", release_url);
     let response = request.send().await?;
+    println!("Response status: {}", response.status());
 
     // note this only works with authenticated requests. Should add support for that later.
     if response.status() == reqwest::StatusCode::NOT_MODIFIED {

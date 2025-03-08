@@ -77,7 +77,7 @@ impl MvrInstaller {
         }
         let mvr_binary_path = cache_folder.join(format!("mvr-{}", version));
         if mvr_binary_path.exists() {
-            println!("Component mvr-{version} already installed. Use `suiup default set mvr {version}` to set the default version to the desired one");
+            println!("Binary mvr-{version} already installed. Use `suiup default set mvr {version}` to set the default version to the desired one");
             return Ok(version);
         }
 

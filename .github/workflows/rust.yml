@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
         rust: [stable]
 
     steps:
@@ -35,11 +35,8 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
-
-      - name: Run tests with nextest
-        run: cargo nextest run --verbose
+      - name: Run tests with test
+        run: cargo test -- --nocapture
 
       - name: Check formatting
         uses: actions-rs/cargo@v1

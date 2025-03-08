@@ -203,7 +203,7 @@ pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::
     match parts.len() {
         1 => {
             let component = BinaryName::from_str(parts[0], true)
-                .map_err(|_| anyhow!("Invalid binary name: {}", parts[0]))?;
+                .map_err(|_| anyhow!("Invalid binary name: {}. Use `suiup list` to find available binaries to install.", parts[0]))?;
             let (network, version) = parse_version_spec(None)?;
             let component_metadata = CommandMetadata {
                 name: component,
@@ -214,7 +214,7 @@ pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::
         }
         2 => {
             let component = BinaryName::from_str(parts[0], true)
-                .map_err(|_| anyhow!("Invalid binary name: {}", parts[0]))?;
+                .map_err(|_| anyhow!("Invalid binary name: {}. Use `suiup list` to find available binaries to install.", parts[0]))?;
             let (network, version) = parse_version_spec(Some(parts[1].to_string()))?;
             let component_metadata = CommandMetadata {
                 name: component,
