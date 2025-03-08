@@ -767,7 +767,7 @@ async fn find_last_release_by_network(releases: Vec<Release>, network: &str) -> 
 /// Detects the current OS and architecture
 pub fn detect_os_arch() -> Result<(String, String), Error> {
     let os = match whoami::platform() {
-        whoami::Platform::Linux => "linux",
+        whoami::Platform::Linux => "ubuntu",
         whoami::Platform::Windows => "windows",
         whoami::Platform::MacOS => "macos",
         _ => anyhow::bail!("Unsupported OS. Supported only: Linux, Windows, MacOS"),
