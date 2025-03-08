@@ -137,7 +137,7 @@ async fn install_from_nightly(
     let repo_url = name.repo_url();
     let binaries_folder = binaries_folder()?;
     let binaries_folder_branch = binaries_folder.join(branch);
-    let mut args = vec![
+    let args = vec![
         "install",
         "--locked",
         "--force",
@@ -149,9 +149,6 @@ async fn install_from_nightly(
         "--root",
         binaries_folder_branch.to_str().unwrap(),
     ];
-    if debug {
-        args.push("--debug");
-    }
     let mut cmd = Command::new("cargo");
     cmd.args(&args);
 
@@ -173,9 +170,13 @@ async fn install_from_nightly(
     let orig_binary_path = binaries_folder_branch.join("bin").join(name.to_str());
 
     // rename the binary to `binary_name-nightly`, to keep things in sync across the board
-    let dst = binaries_folder_branch
-        .join("bin")
-        .join(format!("{}-nightly", name.to_str()));
+
+    let dst_name = if debug {
+        format!("{}-debug-nightly", name.to_str())
+    } else {
+        format!("{}-nightly", name.to_str())
+    };
+    let dst = binaries_folder_branch.join("bin").join(dst_name);
 
     #[cfg(windows)]
     let orig_binary_path = orig_binary_path.with_extension("exe");
