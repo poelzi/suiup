@@ -661,9 +661,7 @@ pub(crate) async fn release_list() -> Result<(Vec<Release>, Option<String>), any
         request = request.header(IF_NONE_MATCH, etag);
     }
 
-    println!("Requesting releases from: {}", release_url);
     let response = request.send().await?;
-    println!("Response status: {}", response.status());
 
     // note this only works with authenticated requests. Should add support for that later.
     if response.status() == reqwest::StatusCode::NOT_MODIFIED {
@@ -680,8 +678,6 @@ pub(crate) async fn release_list() -> Result<(Vec<Release>, Option<String>), any
         .get(ETAG)
         .and_then(|v| v.to_str().ok())
         .map(String::from);
-    let response = response.error_for_status()?;
-    println!("Response: {:?}", response);
     let releases: Vec<Release> = response.json().await?;
     save_release_list(&releases, etag.clone())?;
 
@@ -774,7 +770,8 @@ pub fn detect_os_arch() -> Result<(String, String), Error> {
     };
     let arch = match std::env::consts::ARCH {
         "x86_64" => "x86_64",
-        "aarch64" => "arm64",
+        "aarch64" if os == "macos" => "arm64",
+        "aarch64" => "aarch64",
         _ => anyhow::bail!("Unsupported architecture. Supported only: x86_64, aarch64"),
     };
 
