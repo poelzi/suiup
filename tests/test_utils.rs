@@ -77,7 +77,7 @@ impl TestEnv {
         let testnet_v1_39_3_path = data_path.join(testnet_v1_39_3);
         let testnet_v1_40_1_path = data_path.join(testnet_v1_40_1);
 
-                // On CI / first run we do not have these files, so we skip copying them
+        // On CI / first run we do not have these files, so we skip copying them
         if !testnet_v1_39_3_path.exists() || !testnet_v1_40_1_path.exists() {
             return Ok(());
         }
