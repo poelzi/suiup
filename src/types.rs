@@ -142,7 +142,7 @@ impl Display for Binaries {
         }
 
         for (network, binaries) in s {
-            writeln!(f, "[{network} release]")?;
+            writeln!(f, "[{network} release/branch]")?;
             for (binary, version, debug) in binaries {
                 if binary == "sui" && debug {
                     writeln!(f, "    {binary}-{version} (debug build)")?;

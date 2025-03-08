@@ -564,7 +564,7 @@ pub fn handle_show() -> Result<(), Error> {
     println!("\x1b[1mInstalled binaries:\x1b[0m");
 
     for (network, binaries) in installed_binaries {
-        println!("[{network} release]");
+        println!("[{network} release/branch]");
         for binary in binaries {
             println!("    {binary}");
         }
