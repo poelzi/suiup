@@ -240,7 +240,8 @@ mod tests {
         let mut cmd = suiup_command(vec!["install", "mvr", "-y"], &test_env);
         cmd.assert().success();
 
-        let version_cmd = Command::new("mvr")
+        let default_mvr_binary = test_env.bin_dir.join("mvr");
+        let version_cmd = Command::new(&default_mvr_binary)
             .arg("--version")
             .output()
             .expect("Failed to run command");
@@ -264,7 +265,7 @@ mod tests {
         );
         cmd.assert().success();
 
-        let mut version_cmd = Command::new("mvr");
+        let mut version_cmd = Command::new(&default_mvr_binary);
         version_cmd.arg("--version");
         version_cmd
             .assert()
