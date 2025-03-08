@@ -17,11 +17,12 @@ use reqwest::header::USER_AGENT;
 use reqwest::Client;
 use std::collections::HashMap;
 use std::collections::HashSet;
+#[cfg(not(windows))]
 use std::fs::set_permissions;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Write;
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(windows))]
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
@@ -479,15 +480,16 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             // copy files to default-bin
             let mut dst = default_bin_folder()
                 .map_err(|e| anyhow::anyhow!("Cannot find the default bin folder: {e}"))?;
-            #[cfg(target_os = "windows")]
-            {
-                let name = if debug {
-                    format!("{}-debug.exe", name)
-                } else {
-                    format!("{}.exe", name)
-                };
-            }
+            let name = if debug {
+                format!("{}-debug", name)
+            } else {
+                format!("{}", name)
+            };
+
             dst.push(&name.to_string());
+
+            #[cfg(target_os = "windows")]
+            dst.set_extension("exe");
 
             let mut src = binaries_folder()
                 .map_err(|e| anyhow::anyhow!("Cannot find the binaries folder: {e}"))?;
@@ -498,15 +500,14 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                 src.push("bin");
             }
 
-            #[cfg(target_os = "windows")]
-            {
-                let binary_version = format!("{}.exe", binary_version);
-            }
             if debug {
                 src.push(format!("{}-debug-{}", name, version));
             } else {
                 src.push(binary_version);
             }
+
+            #[cfg(target_os = "windows")]
+            src.set_extension("exe");
 
             println!("dst: {}, src: {}", dst.display(), src.display());
 
@@ -530,8 +531,6 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             {
                 std::fs::copy(&src, &dst)?;
             }
-
-            println!("Test");
 
             update_default_version_file(
                 &vec![name.to_string()],
@@ -1089,16 +1088,14 @@ fn update_after_install(
                     std::fs::create_dir_all(&binary_folder)?;
                 }
 
+                #[cfg(target_os = "windows")]
+                let filename = format!("{}.exe", filename);
                 println!(
                     "Installing binary to {}/{}",
                     binary_folder.display(),
                     filename
                 );
 
-                #[cfg(target_os = "windows")]
-                {
-                    let filename = format!("{}.exe", filename);
-                }
                 let src = binary_folder.join(&filename);
                 let dst = default_bin_folder()?.join(binary);
 

@@ -4,9 +4,13 @@
 use std::env;
 use std::path::PathBuf;
 
+#[cfg(not(windows))]
 const XDG_DATA_HOME: &str = "XDG_DATA_HOME";
+#[cfg(not(windows))]
 const XDG_CONFIG_HOME: &str = "XDG_CONFIG_HOME";
+#[cfg(not(windows))]
 const XDG_CACHE_HOME: &str = "XDG_CACHE_HOME";
+#[cfg(not(windows))]
 const HOME: &str = "HOME";
 
 pub fn get_data_home() -> PathBuf {
