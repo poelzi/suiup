@@ -21,6 +21,7 @@ use std::fs::set_permissions;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Write;
+#[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
@@ -216,7 +217,7 @@ async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
         #[cfg(target_os = "windows")]
         let filename = format!("walrus.exe");
 
-        install_binary(filename, network, "latest", false, binaries_folder()?, yes)?;
+        install_binary(&filename, network, "latest", false, binaries_folder()?, yes)?;
     } else {
         println!("Binary walrus-latest already installed");
     }
