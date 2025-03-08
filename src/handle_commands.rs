@@ -701,7 +701,11 @@ pub(crate) async fn release_list() -> Result<(Vec<Release>, Option<String>), any
         .get(ETAG)
         .and_then(|v| v.to_str().ok())
         .map(String::from);
-    let releases: Vec<Release> = response.json().await?;
+    let response = response.error_for_status();
+    if let Err(ref e) = response {
+        bail!("Error: {e}");
+    }
+    let releases: Vec<Release> = response.unwrap().json().await?;
     save_release_list(&releases, etag.clone())?;
 
     Ok((releases, etag))
