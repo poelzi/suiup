@@ -426,6 +426,7 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             if name.len() != 2 && nightly.is_none() {
                 bail!("Invalid number of arguments. Version is required: 'sui testnet-v1.39.3', 'sui testnet' -- this will use an installed binary that has the higest testnet version. \n For `mvr` only pass the version: `mvr v0.0.5`")
             }
+
             let CommandMetadata {
                 name,
                 network,
@@ -435,8 +436,6 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             let network = if name == BinaryName::Mvr {
                 if let Some(ref nightly) = nightly {
                     nightly
-                } else if nightly.is_none() {
-                    "main"
                 } else {
                     "standalone"
                 }
