@@ -274,7 +274,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             yes,
         } => {
             if components.is_empty() {
-                print!("No components provided. Use `suiup component list` to see available components.");
+                print!("No components provided. Use `suiup list` to see available components.");
                 return Ok(());
             }
 
@@ -294,8 +294,7 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
             let version = component.version;
             let available_components = available_components();
             if !available_components.contains(&name.to_string().as_str()) {
-                println!("Binary {} does not exist", name);
-                return Ok(());
+                bail!("Binary {} does not exist", name);
             }
 
             if name != BinaryName::Sui && debug && nightly.is_none() {
