@@ -125,6 +125,16 @@ pub(crate) enum DefaultCommands {
             help = "Whether to set the debug version of the binary as default (only available for sui)."
         )]
         debug: bool,
+
+        #[arg(
+            long,
+            required = false,
+            value_name = "branch",
+            default_missing_value = "main",
+            num_args = 0..=1,
+            help = "Use the nightly version by optionally specifying the branch name (uses main by default). Use `suiup show` to find all installed binaries"
+        )]
+        nightly: Option<String>,
     },
 }
 

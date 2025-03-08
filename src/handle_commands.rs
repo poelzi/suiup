@@ -408,7 +408,6 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
 
 /// Handles the default commands
 pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
-    println!("Handling default command: {:?}", cmd);
     match cmd {
         DefaultCommands::Get => {
             // let default_binaries = DefaultBinaries::load()?;
@@ -418,8 +417,12 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");
         }
 
-        DefaultCommands::Set { name, debug } => {
-            if name.len() != 2 {
+        DefaultCommands::Set {
+            name,
+            debug,
+            nightly,
+        } => {
+            if name.len() != 2 && nightly.is_none() {
                 bail!("Invalid number of arguments. Version is required: 'sui testnet-v1.39.3', 'sui testnet' -- this will use an installed binary that has the higest testnet version. \n For `mvr` only pass the version: `mvr v0.0.5`")
             }
             let CommandMetadata {
@@ -429,15 +432,21 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             } = parse_component_with_version(&name.join(" "))?;
 
             let network = if name == BinaryName::Mvr {
-                "standalone".to_string()
+                if let Some(ref nightly) = nightly {
+                    nightly
+                } else if nightly.is_none() {
+                    "main"
+                } else {
+                    "standalone"
+                }
             } else {
-                network
+                &network
             };
 
             // a map of network --> to BinaryVersion
             let installed_binaries = installed_binaries_grouped_by_network(None)?;
             let binaries = installed_binaries
-                .get(&network)
+                .get(network)
                 .ok_or_else(|| anyhow!("No binaries installed for {network}"))?;
 
             // Check if the binary exists in any network
@@ -472,7 +481,8 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                 })?;
 
             // copy files to default-bin
-            let mut dst = default_bin_folder()?;
+            let mut dst = default_bin_folder()
+                .map_err(|e| anyhow::anyhow!("Cannot find the default bin folder: {e}"))?;
             #[cfg(target_os = "windows")]
             {
                 let name = if debug {
@@ -483,8 +493,15 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             }
             dst.push(&name.to_string());
 
-            let mut src = binaries_folder()?;
+            let mut src = binaries_folder()
+                .map_err(|e| anyhow::anyhow!("Cannot find the binaries folder: {e}"))?;
             src.push(network.to_string());
+
+            if nightly.is_some() {
+                // cargo install adds a bin folder to the specified path :-)
+                src.push("bin");
+            }
+
             #[cfg(target_os = "windows")]
             {
                 let binary_version = format!("{}.exe", binary_version);
@@ -494,6 +511,8 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             } else {
                 src.push(binary_version);
             }
+
+            println!("dst: {}, src: {}", dst.display(), src.display());
 
             #[cfg(not(target_os = "windows"))]
             {
@@ -516,7 +535,14 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                 std::fs::copy(&src, &dst)?;
             }
 
-            update_default_version_file(&vec![name.to_string()], network, &version, debug)?;
+            println!("Test");
+
+            update_default_version_file(
+                &vec![name.to_string()],
+                network.to_string(),
+                &version,
+                debug,
+            )?;
             println!("Default binary updated successfully");
         }
     }

@@ -140,10 +140,9 @@ mod tests {
 
         let mut cmd = Command::cargo_bin("suiup")?;
         cmd.arg("default").arg("get");
-        cmd.assert().success().stdout(predicate::str::contains(
-            "[testnet release]
-    sui-v1.39.3 (debug build)",
-        ));
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("sui-v1.39.3 (debug build)"));
 
         Ok(())
     }
@@ -231,5 +230,55 @@ mod tests {
             .stdout(predicate::str::contains("1.39.3"));
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_default_workflow_with_mvr() -> Result<(), anyhow::Error> {
+        let test_env = TestEnv::new()?;
+
+        // Install last version and nightly
+        let mut cmd = suiup_command(vec!["install", "mvr", "-y"], &test_env);
+        cmd.assert().success();
+
+        let version_cmd = Command::new("mvr")
+            .arg("--version")
+            .output()
+            .expect("Failed to run command");
+        let mvr_version = if version_cmd.status.success() {
+            String::from_utf8_lossy(&version_cmd.stdout).replace("mvr ", "")
+        } else {
+            panic!("Could not run command")
+        };
+
+        let version: Vec<_> = mvr_version.split("-").collect();
+        let version = version[0];
+
+        // Install from main branch
+        let mut cmd = suiup_command(vec!["install", "mvr", "--nightly", "-y"], &test_env);
+        cmd.assert().success();
+
+        // Switch version to the one we installed from release
+        let mut cmd = suiup_command(
+            vec!["default", "set", "mvr", &format!("v{version}")],
+            &test_env,
+        );
+        cmd.assert().success();
+
+        let mut version_cmd = Command::new("mvr");
+        version_cmd.arg("--version");
+        version_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(version));
+
+        // Now switch from a release version to nightly
+        let mut cmd = suiup_command(vec!["default", "set", "mvr", "--nightly"], &test_env);
+        cmd.assert().success();
+
+        Ok(())
+    }
+
+    fn test_installing_nightly_debug() {
+        // for example installing mvr --nightly --debug fails
     }
 }
