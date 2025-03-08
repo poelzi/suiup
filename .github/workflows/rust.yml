@@ -35,6 +35,10 @@ jobs:
           override: true
           components: rustfmt, clippy
 
+      - name: Install Build Dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install pkg-config libssl-dev clang
+
       - name: Run tests with test
         run: cargo test -- --nocapture
 
