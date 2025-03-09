@@ -508,8 +508,6 @@ pub(crate) fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             #[cfg(target_os = "windows")]
             src.set_extension("exe");
 
-            println!("dst: {}, src: {}", dst.display(), src.display());
-
             #[cfg(not(target_os = "windows"))]
             {
                 if dst.exists() {
@@ -878,8 +876,6 @@ pub async fn download_file(url: &str, download_to: &PathBuf, name: &str) -> Resu
         return Err(anyhow!("Failed to download: {}", response.status()));
     }
 
-    println!("Name of file: {name}");
-
     let mut total_size = response.content_length().unwrap_or_else(|| 0);
     //walrus is on google storage, so different content length header
     if total_size == 0 {
@@ -992,7 +988,7 @@ fn extract_component(orig_binary: &str, network: String, filename: &str) -> Resu
             let mut output_file = File::create(&output_path)?;
 
             std::io::copy(&mut f, &mut output_file)?;
-            println!(" '{}' extracted successfully!", &orig_binary);
+            println!(" '{}' extracted successfully!", &binary);
             #[cfg(not(target_os = "windows"))]
             {
                 // Retrieve and apply the original file permissions on Unix-like systems
@@ -1115,8 +1111,6 @@ fn update_after_install(
 
                 let src = binary_folder.join(&filename);
                 let dst = default_bin_folder()?.join(binary);
-
-                println!("src: {}", src.display());
 
                 println!("Setting {} as default", &filename);
 
