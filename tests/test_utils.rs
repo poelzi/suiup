@@ -4,6 +4,10 @@
 use anyhow::Result;
 use std::env;
 use std::path::PathBuf;
+use suiup::paths::{
+    get_cache_home, get_config_home, get_data_home, get_default_bin_dir, get_suiup_cache_dir,
+    get_suiup_config_dir, get_suiup_data_dir,
+};
 use tempfile::TempDir;
 
 pub struct TestEnv {
@@ -20,12 +24,17 @@ impl TestEnv {
         let temp_dir = TempDir::new()?;
         let base = temp_dir.path();
 
-        let data_dir = base.join("data");
-        let config_dir = base.join("config");
-        let cache_dir = base.join("cache");
-        let bin_dir = base.join(".local/bin");
+        let home_dir = dirs::home_dir().unwrap();
 
-        // Create directories
+        let data_dir = base.join(get_data_home().strip_prefix(&home_dir).unwrap());
+        let config_dir = base.join(get_config_home().strip_prefix(&home_dir).unwrap());
+        let cache_dir = base.join(get_cache_home().strip_prefix(&home_dir).unwrap());
+        let bin_dir = base.join(get_default_bin_dir().strip_prefix(&home_dir).unwrap());
+
+        println!("Data dir: {}", data_dir.display());
+        println!("Config dir: {}", config_dir.display());
+        println!("Cache dir: {}", cache_dir.display());
+        println!("Bin dir: {}", bin_dir.display()); // Create directories
         std::fs::create_dir_all(&data_dir)?;
         std::fs::create_dir_all(&config_dir)?;
         std::fs::create_dir_all(&cache_dir)?;
@@ -91,7 +100,7 @@ impl TestEnv {
             "Something went wrong, release archives for test data are missing"
         );
 
-        let releases_dir = self.cache_dir.join("suiup").join("releases");
+        let releases_dir = self.cache_dir.join("releases");
         std::fs::create_dir_all(&releases_dir)?;
 
         std::fs::copy(

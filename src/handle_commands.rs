@@ -1115,17 +1115,15 @@ fn update_after_install(
                 println!("Setting {} as default", &filename);
 
                 #[cfg(target_os = "windows")]
-                {
-                    let mut dst = dst.clone();
-                    dst.set_extension("exe");
-                    std::fs::copy(&src, &dst).map_err(|e| {
-                        anyhow!(
+                let dst = dst.clone().set_extension("exe");
+
+                std::fs::copy(&src, &dst).map_err(|e| {
+                    anyhow!(
                         "Error copying the binary to the default folder (src: {}, dst: {}): {e}",
                         src.display(),
                         dst.display()
                     )
-                    })?;
-                }
+                })?;
 
                 #[cfg(unix)]
                 {
