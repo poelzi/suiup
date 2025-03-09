@@ -1115,7 +1115,9 @@ fn update_after_install(
                 println!("Setting {} as default", &filename);
 
                 #[cfg(target_os = "windows")]
-                let dst = dst.clone().set_extension("exe");
+                let mut dst = dst.clone();
+                #[cfg(target_os = "windows")]
+                dst.set_extension("exe");
 
                 std::fs::copy(&src, &dst).map_err(|e| {
                     anyhow!(
