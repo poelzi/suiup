@@ -112,8 +112,10 @@ pub fn get_default_bin_dir() -> PathBuf {
     #[cfg(windows)]
     {
         let mut path = PathBuf::from(env::var_os("LOCALAPPDATA").expect("LOCALAPPDATA not set"));
-        path.push(".local");
         path.push("bin");
+        if !path.exists() {
+            std::fs::create_dir_all(&path).unwrap();
+        }
         path
     }
 

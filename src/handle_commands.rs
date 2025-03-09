@@ -106,7 +106,7 @@ async fn install_from_release(
         let binary_path = binaries_folder()?.join(network).join(binary_filename);
         install_binary(name, network.to_string(), &version, debug, binary_path, yes)?;
     } else {
-        println!("Binary {name}-{version} already installed");
+        println!("Binary {name}-{version} already installed. Use `suiup default set` to change the default binary.");
     }
     Ok(())
 }
@@ -239,7 +239,6 @@ async fn install_mvr(version: Option<String>, yes: bool) -> Result<(), Error> {
         let binary_path = binaries_folder()?
             .join(&network)
             .join(format!("{}-{}", binary_name, installed_version));
-        println!("Installing mvr to {}", binary_path.display());
         install_binary(
             &binary_name,
             network,
@@ -867,9 +866,19 @@ pub async fn download_file(url: &str, download_to: &PathBuf, name: &str) -> Resu
     let client = Client::new();
     let response = client.get(url).header("User-Agent", "suiup").send().await?;
 
+    let response = response.error_for_status();
+
+    if let Err(ref e) = response {
+        bail!("Encountered unexpected error: {e}");
+    }
+
+    let response = response.unwrap();
+
     if !response.status().is_success() {
         return Err(anyhow!("Failed to download: {}", response.status()));
     }
+
+    println!("Name of file: {name}");
 
     let mut total_size = response.content_length().unwrap_or_else(|| 0);
     //walrus is on google storage, so different content length header
@@ -949,7 +958,7 @@ async fn download_asset_from_github(
 ///
 /// This extracts the component to the binaries folder under the network from which release comes
 /// from, and sets the correct permissions for Unix based systems.
-fn extract_component(binary: &str, network: String, filename: &str) -> Result<(), Error> {
+fn extract_component(orig_binary: &str, network: String, filename: &str) -> Result<(), Error> {
     let mut archive_path = release_archive_folder()?;
     archive_path.push(filename);
 
@@ -958,13 +967,14 @@ fn extract_component(binary: &str, network: String, filename: &str) -> Result<()
     let tar = GzDecoder::new(file);
     let mut archive = Archive::new(tar);
 
-    #[cfg(target_os = "windows")]
-    let binary = format!("{}.exe", binary);
+    let binary = format!("{orig_binary}");
+    #[cfg(windows)]
+    let binary = format!("{}.exe", orig_binary);
 
     // Check if the current entry matches the file name
     for file in archive.entries()? {
         let mut f = file.unwrap();
-        if f.path()?.file_name() == Some(std::ffi::OsStr::new(&binary)) {
+        if f.path()?.file_name().map(|x| x.to_str()).flatten() == Some(&binary) {
             println!("Extracting file: {}", &binary);
 
             let mut output_path = binaries_folder()?;
@@ -972,12 +982,17 @@ fn extract_component(binary: &str, network: String, filename: &str) -> Result<()
             if !output_path.is_dir() {
                 std::fs::create_dir_all(output_path.as_path())?;
             }
-            let binary_version = format!("{}-{}", binary, extract_version_from_release(filename)?);
+            let version = extract_version_from_release(filename)?;
+            let binary_version = format!("{}-{}", orig_binary, version);
+            #[cfg(not(windows))]
             output_path.push(&binary_version);
+            #[cfg(windows)]
+            output_path.push(&format!("{}.exe", binary_version));
+
             let mut output_file = File::create(&output_path)?;
 
             std::io::copy(&mut f, &mut output_file)?;
-            println!(" '{}' extracted successfully!", &binary);
+            println!(" '{}' extracted successfully!", &orig_binary);
             #[cfg(not(target_os = "windows"))]
             {
                 // Retrieve and apply the original file permissions on Unix-like systems
@@ -1009,6 +1024,7 @@ fn default_bin_folder() -> Result<PathBuf, anyhow::Error> {
         std::fs::create_dir_all(path.as_path())
             .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
     }
+
     Ok(path)
 }
 
@@ -1090,6 +1106,7 @@ fn update_after_install(
 
                 #[cfg(target_os = "windows")]
                 let filename = format!("{}.exe", filename);
+
                 println!(
                     "Installing binary to {}/{}",
                     binary_folder.display(),
@@ -1099,9 +1116,22 @@ fn update_after_install(
                 let src = binary_folder.join(&filename);
                 let dst = default_bin_folder()?.join(binary);
 
+                println!("src: {}", src.display());
+
                 println!("Setting {} as default", &filename);
-                std::fs::copy(&src, &dst)
-                    .map_err(|e| anyhow!("Error copying the binary to the default folder: {e}"))?;
+
+                #[cfg(target_os = "windows")]
+                {
+                    let mut dst = dst.clone();
+                    dst.set_extension("exe");
+                    std::fs::copy(&src, &dst).map_err(|e| {
+                        anyhow!(
+                        "Error copying the binary to the default folder (src: {}, dst: {}): {e}",
+                        src.display(),
+                        dst.display()
+                    )
+                    })?;
+                }
 
                 #[cfg(unix)]
                 {
