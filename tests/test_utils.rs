@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use std::env;
+use lazy_static::lazy_static;
 use std::path::PathBuf;
+use std::{env, sync::Mutex};
 use suiup::paths::{get_cache_home, get_config_home, get_data_home, get_default_bin_dir};
 use tempfile::TempDir;
 
@@ -14,6 +15,10 @@ pub struct TestEnv {
     pub cache_dir: PathBuf,
     pub bin_dir: PathBuf,
     original_env: Vec<(String, String)>,
+}
+
+lazy_static! {
+    static ref ZIP_FILES_MUTEX: Mutex<()> = Mutex::new(());
 }
 
 impl TestEnv {
@@ -93,6 +98,7 @@ impl TestEnv {
     }
 
     pub fn copy_testnet_releases_to_cache(&self) -> Result<()> {
+        let _guard = ZIP_FILES_MUTEX.lock().unwrap();
         // Create cache directory if it doesn't exist
         std::fs::create_dir_all(&self.cache_dir)?;
 
