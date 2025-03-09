@@ -82,10 +82,13 @@ async fn install_from_release(
     version_spec: Option<String>,
     debug: bool,
     yes: bool,
+    github_token: Option<String>,
 ) -> Result<(), Error> {
     let filename = match version_spec {
-        Some(version) => download_release_at_version(network, &version).await?,
-        None => download_latest_release(network).await?,
+        Some(version) => {
+            download_release_at_version(network, &version, github_token.clone()).await?
+        }
+        None => download_latest_release(network, github_token.clone()).await?,
     };
 
     let version = extract_version_from_release(&filename)?;
@@ -207,6 +210,7 @@ async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
             ),
             &download_to,
             "walrus-latest",
+            None,
         )
         .await?;
 
@@ -256,7 +260,10 @@ async fn install_mvr(version: Option<String>, yes: bool) -> Result<(), Error> {
 }
 
 // Main component handling function
-pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error> {
+pub(crate) async fn handle_component(
+    cmd: ComponentCommands,
+    github_token: Option<String>,
+) -> Result<(), Error> {
     match cmd {
         ComponentCommands::List => {
             let components = available_components();
@@ -320,8 +327,15 @@ pub(crate) async fn handle_component(cmd: ComponentCommands) -> Result<(), Error
                     install_from_nightly(&name, branch, debug, yes).await?;
                 }
                 _ => {
-                    install_from_release(&name.to_string().as_str(), &network, version, debug, yes)
-                        .await?;
+                    install_from_release(
+                        &name.to_string().as_str(),
+                        &network,
+                        version,
+                        debug,
+                        yes,
+                        github_token.clone(),
+                    )
+                    .await?;
                 }
             }
         }
@@ -565,7 +579,11 @@ pub fn handle_show() -> Result<(), Error> {
 }
 
 /// Handles the `update` command
-pub async fn handle_update(binary_name: Vec<String>, yes: bool) -> Result<(), Error> {
+pub async fn handle_update(
+    binary_name: Vec<String>,
+    yes: bool,
+    github_token: Option<String>,
+) -> Result<(), Error> {
     if binary_name.is_empty() || binary_name.len() > 2 {
         bail!("Invalid number of arguments for `update` command");
     }
@@ -614,28 +632,34 @@ pub async fn handle_update(binary_name: Vec<String>, yes: bool) -> Result<(), Er
     // then find the last release for each network and compare the versions
 
     if name == BinaryName::Mvr {
-        handle_component(ComponentCommands::Add {
-            components: binary_name,
-            debug: false,
-            nightly: None,
-            yes,
-        })
+        handle_component(
+            ComponentCommands::Add {
+                components: binary_name,
+                debug: false,
+                nightly: None,
+                yes,
+            },
+            github_token,
+        )
         .await?;
         return Ok(());
     }
 
     if name == BinaryName::Walrus {
-        handle_component(ComponentCommands::Add {
-            components: binary_name,
-            debug: false,
-            nightly: None,
-            yes,
-        })
+        handle_component(
+            ComponentCommands::Add {
+                components: binary_name,
+                debug: false,
+                nightly: None,
+                yes,
+            },
+            github_token,
+        )
         .await?;
         return Ok(());
     }
 
-    let releases = release_list().await?.0;
+    let releases = release_list(github_token.clone()).await?.0;
     let mut to_update = vec![];
     for (n, v) in &network_local_last_version {
         let last_release = last_release_for_network(&releases, &n).await?;
@@ -650,12 +674,15 @@ pub async fn handle_update(binary_name: Vec<String>, yes: bool) -> Result<(), Er
 
     for (n, v) in to_update.iter() {
         println!("Updating {name} to {v} from {n} release");
-        handle_component(ComponentCommands::Add {
-            components: binary_name.clone(),
-            debug: false,
-            nightly: None,
-            yes,
-        })
+        handle_component(
+            ComponentCommands::Add {
+                components: binary_name.clone(),
+                debug: false,
+                nightly: None,
+                yes,
+            },
+            github_token.clone(),
+        )
         .await?;
     }
 
@@ -671,10 +698,18 @@ pub fn handle_which() -> Result<(), Error> {
 }
 
 /// Fetches the list of releases from the GitHub repository
-pub(crate) async fn release_list() -> Result<(Vec<Release>, Option<String>), anyhow::Error> {
+pub(crate) async fn release_list(
+    github_token: Option<String>,
+) -> Result<(Vec<Release>, Option<String>), anyhow::Error> {
     let client = Client::new();
     let release_url = format!("https://api.github.com/repos/{}/releases", GITHUB_REPO);
     let mut request = client.get(&release_url).header("User-Agent", "suiup");
+
+    // Add authorization header if token is provided
+    if let Some(token) = github_token {
+        request = request.header("Authorization", format!("token {}", token));
+    }
+
     // Add ETag for caching
     if let Ok(etag) = read_etag_file() {
         request = request.header(IF_NONE_MATCH, etag);
@@ -807,6 +842,7 @@ pub fn detect_os_arch() -> Result<(String, String), Error> {
 async fn download_release_at_version(
     network: &str,
     version: &str,
+    github_token: Option<String>,
 ) -> Result<String, anyhow::Error> {
     let (os, arch) = detect_os_arch()?;
 
@@ -816,15 +852,23 @@ async fn download_release_at_version(
     let client = reqwest::Client::new();
     let mut headers = HeaderMap::new();
 
-    let releases = release_list().await?.0;
+    let releases = release_list(github_token.clone()).await?.0;
 
     if let Some(release) = releases
         .iter()
         .find(|r| r.assets.iter().any(|a| a.name.contains(&tag)))
     {
-        download_asset_from_github(release, &os, &arch).await
+        download_asset_from_github(release, &os, &arch, github_token).await
     } else {
         headers.insert(USER_AGENT, HeaderValue::from_static("suiup"));
+
+        // Add authorization header if token is provided
+        if let Some(token) = &github_token {
+            headers.insert(
+                "Authorization",
+                HeaderValue::from_str(&format!("token {}", token)).unwrap(),
+            );
+        }
 
         let url = format!(
             "https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{}",
@@ -837,14 +881,17 @@ async fn download_release_at_version(
         }
 
         let release: Release = response.json().await?;
-        download_asset_from_github(&release, &os, &arch).await
+        download_asset_from_github(&release, &os, &arch, github_token).await
     }
 }
 
 /// Downloads the latest release for a given network
-async fn download_latest_release(network: &str) -> Result<String, anyhow::Error> {
+async fn download_latest_release(
+    network: &str,
+    github_token: Option<String>,
+) -> Result<String, anyhow::Error> {
     println!("Downloading release list");
-    let releases = release_list().await?;
+    let releases = release_list(github_token.clone()).await?;
 
     let (os, arch) = detect_os_arch()?;
 
@@ -857,12 +904,28 @@ async fn download_latest_release(network: &str) -> Result<String, anyhow::Error>
         extract_version_from_release(&last_release.assets[0].name)?
     );
 
-    download_asset_from_github(&last_release, &os, &arch).await
+    download_asset_from_github(&last_release, &os, &arch, github_token).await
 }
 
-pub async fn download_file(url: &str, download_to: &PathBuf, name: &str) -> Result<String, Error> {
+pub async fn download_file(
+    url: &str,
+    download_to: &PathBuf,
+    name: &str,
+    github_token: Option<String>,
+) -> Result<String, Error> {
     let client = Client::new();
-    let response = client.get(url).header("User-Agent", "suiup").send().await?;
+
+    // Start with a basic request
+    let mut request = client.get(url).header("User-Agent", "suiup");
+
+    // Add authorization header if token is provided and the URL is from GitHub
+    if let Some(token) = github_token {
+        if url.contains("github.com") {
+            request = request.header("Authorization", format!("token {}", token));
+        }
+    }
+
+    let response = request.send().await?;
 
     let response = response.error_for_status();
 
@@ -933,6 +996,7 @@ async fn download_asset_from_github(
     release: &Release,
     os: &str,
     arch: &str,
+    github_token: Option<String>,
 ) -> Result<String, anyhow::Error> {
     let asset = release
         .assets
@@ -946,7 +1010,7 @@ async fn download_asset_from_github(
     let mut file_path = path.clone();
     file_path.push(&asset.name);
 
-    download_file(&url, &file_path, &name).await
+    download_file(&url, &file_path, &name, github_token).await
 }
 
 /// Extracts a component from the release archive. The component's name is identified by the
@@ -1112,7 +1176,7 @@ fn update_after_install(
                 let src = binary_folder.join(&filename);
                 let dst = default_bin_folder()?.join(binary);
 
-                println!("Setting {} as default", &filename);
+                println!("Setting {} as default", binary);
 
                 #[cfg(target_os = "windows")]
                 let mut dst = dst.clone();

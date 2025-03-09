@@ -23,6 +23,7 @@ const RELEASES_ARCHIVES_FOLDER: &str = "releases";
 async fn main() -> Result<(), Error> {
     initialize()?;
     let args = Suiup::parse();
+    let github_token = args.github_token.clone();
 
     match args.command {
         Commands::Default(cmd) => handle_default(cmd)?,
@@ -32,20 +33,23 @@ async fn main() -> Result<(), Error> {
             debug,
             yes,
         } => {
-            handle_component(ComponentCommands::Add {
-                components,
-                nightly,
-                debug,
-                yes,
-            })
+            handle_component(
+                ComponentCommands::Add {
+                    components,
+                    nightly,
+                    debug,
+                    yes,
+                },
+                github_token,
+            )
             .await?
         }
         Commands::Remove { binary } => {
-            handle_component(ComponentCommands::Remove { binary }).await?
+            handle_component(ComponentCommands::Remove { binary }, github_token).await?
         }
-        Commands::List => handle_component(ComponentCommands::List).await?,
+        Commands::List => handle_component(ComponentCommands::List, github_token).await?,
         Commands::Show => handle_show()?,
-        Commands::Update { name, yes } => handle_update(name, yes).await?,
+        Commands::Update { name, yes } => handle_update(name, yes, github_token).await?,
         Commands::Which => handle_which()?,
         Commands::Completion { shell } => {
             let mut cmd = Suiup::command();

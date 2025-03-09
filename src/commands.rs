@@ -10,6 +10,12 @@ use clap::{Parser, Subcommand, ValueEnum};
 pub(crate) struct Suiup {
     #[command(subcommand)]
     pub command: Commands,
+
+    #[arg(
+        long = "github-token",
+        help = "GitHub API token for authenticated requests (helps avoid rate limits)"
+    )]
+    pub github_token: Option<String>,
 }
 
 #[derive(Subcommand)]

@@ -107,6 +107,7 @@ impl MvrInstaller {
             &asset.browser_download_url,
             &mvr_binary_path,
             format!("mvr-{}", version).as_str(),
+            None,
         )
         .await?;
 
