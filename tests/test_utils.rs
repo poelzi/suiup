@@ -5,7 +5,10 @@ use anyhow::Result;
 use lazy_static::lazy_static;
 use std::path::PathBuf;
 use std::{env, sync::Mutex};
-use suiup::paths::{get_cache_home, get_config_home, get_data_home, get_default_bin_dir};
+use suiup::paths::{
+    get_cache_home, get_config_home, get_data_home, get_default_bin_dir, get_suiup_cache_dir,
+    get_suiup_config_dir, get_suiup_data_dir, installed_binaries_file,
+};
 use tempfile::TempDir;
 
 pub struct TestEnv {
@@ -62,6 +65,12 @@ impl TestEnv {
         std::fs::create_dir_all(&config_dir)?;
         std::fs::create_dir_all(&cache_dir)?;
         std::fs::create_dir_all(&bin_dir)?;
+
+        assert!(get_suiup_cache_dir().exists());
+        assert!(get_suiup_config_dir().exists());
+        assert!(get_default_bin_dir().exists());
+        assert!(get_suiup_data_dir().exists());
+        assert!(installed_binaries_file().unwrap().exists());
 
         // Store original env vars
         let vars_to_capture = vec![

@@ -38,8 +38,14 @@ jobs:
           override: true
           components: rustfmt, clippy
 
+      - name: Install cargo nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
       - name: Run tests with test
-        run: cargo test -- --nocapture
+        # run: cargo test -- --nocapturexd
+        run: cargo nextest run
 
       - name: Check formatting
         uses: actions-rs/cargo@v1
