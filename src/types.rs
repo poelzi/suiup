@@ -12,22 +12,22 @@ use std::{
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
-use crate::handle_commands::{default_file_path, installed_binaries_file};
+use crate::paths::{default_file_path, installed_binaries_file};
 
 pub type Version = String;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub(crate) struct Release {
+pub struct Release {
     pub assets: Vec<Asset>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub(crate) struct Asset {
+pub struct Asset {
     pub browser_download_url: String,
     pub name: String,
 }
 
-pub(crate) struct Binaries {
+pub struct Binaries {
     pub binaries: Vec<BinaryVersion>,
 }
 
@@ -43,7 +43,7 @@ pub struct InstalledBinaries {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub(crate) struct BinaryVersion {
+pub struct BinaryVersion {
     /// The name of the Sui tool binary
     pub binary_name: String,
     /// The network release of the binary
@@ -60,7 +60,7 @@ pub(crate) struct BinaryVersion {
     Copy, Deserialize, Serialize, Hash, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum,
 )]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum Network {
+pub enum Network {
     #[serde(alias = "testnet")]
     Testnet,
     #[serde(alias = "devnet")]
@@ -70,56 +70,57 @@ pub(crate) enum Network {
 }
 
 impl InstalledBinaries {
-    pub(crate) fn create_file(path: &PathBuf) -> Result<(), Error> {
+    pub fn create_file(path: &PathBuf) -> Result<(), Error> {
         let binaries = InstalledBinaries { binaries: vec![] };
         let s = serde_json::to_string_pretty(&binaries)
-            .map_err(|_| anyhow!("Cannot serialize the installed binaries to file"))?;
-        std::fs::write(path, s).map_err(|_| anyhow!("Cannot write the installed binaries file"))?;
+            .map_err(|e| anyhow!("Cannot serialize the installed binaries to file: {e}"))?;
+        std::fs::write(path, s)
+            .map_err(|e| anyhow!("Cannot write the installed binaries file: {e}"))?;
         Ok(())
     }
 
-    pub(crate) fn new() -> Result<Self, Error> {
+    pub fn new() -> Result<Self, Error> {
         Self::read_from_file()
     }
 
     /// Save the installed binaries data to the installed binaries JSON file
-    pub(crate) fn save_to_file(&self) -> Result<(), Error> {
+    pub fn save_to_file(&self) -> Result<(), Error> {
         let s = serde_json::to_string_pretty(self)
-            .map_err(|_| anyhow!("Cannot read the installed binaries file"))?;
+            .map_err(|e| anyhow!("Cannot read the installed binaries file: {e}"))?;
         std::fs::write(installed_binaries_file()?, s)
-            .map_err(|_| anyhow!("Cannot serialize the installed binaries to file"))?;
+            .map_err(|e| anyhow!("Cannot serialize the installed binaries to file: {e}"))?;
         Ok(())
     }
 
     /// Read the installed binaries JSON file
-    pub(crate) fn read_from_file() -> Result<Self, Error> {
+    pub fn read_from_file() -> Result<Self, Error> {
         let s = std::fs::read_to_string(installed_binaries_file()?)
-            .map_err(|_| anyhow!("Cannot read from the installed binaries file"))?;
+            .map_err(|e| anyhow!("Cannot read from the installed binaries file: {e}"))?;
         let binaries: InstalledBinaries = serde_json::from_str(&s)
-            .map_err(|_| anyhow!("Cannot deserialize from installed binaries file"))?;
+            .map_err(|e| anyhow!("Cannot deserialize from installed binaries file: {e}"))?;
         Ok(binaries)
     }
 
     /// Add a binary to the installed binaries JSON file
-    pub(crate) fn add_binary(&mut self, binary: BinaryVersion) {
+    pub fn add_binary(&mut self, binary: BinaryVersion) {
         if self.binaries.iter().find(|b| b == &&binary).is_none() {
             self.binaries.push(binary);
         }
     }
 
     /// Remove a binary from the installed binaries JSON file
-    pub(crate) fn remove_binary(&mut self, binary: &str) {
+    pub fn remove_binary(&mut self, binary: &str) {
         self.binaries.retain(|b| b.binary_name != binary);
     }
 
     /// List the binaries in the installed binaries JSON file
-    pub(crate) fn binaries(&self) -> &[BinaryVersion] {
+    pub fn binaries(&self) -> &[BinaryVersion] {
         &self.binaries
     }
 }
 
 impl DefaultBinaries {
-    pub fn load() -> Result<DefaultBinaries, Error> {
+    pub fn _load() -> Result<DefaultBinaries, Error> {
         let default_file_path = default_file_path()?;
         let file_content = std::fs::read_to_string(default_file_path)?;
         let default_binaries: DefaultBinaries =

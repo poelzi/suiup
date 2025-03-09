@@ -1,0 +1,146 @@
+use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::Error;
+use reqwest::header::ETAG;
+use reqwest::header::IF_NONE_MATCH;
+use reqwest::Client;
+
+use crate::handlers::version::extract_version_from_release;
+use crate::handlers::GITHUB_REPO;
+use crate::paths::get_suiup_cache_dir;
+use crate::types::Release;
+
+/// Fetches the list of releases from the GitHub repository
+pub async fn release_list(
+    github_token: Option<String>,
+) -> Result<(Vec<Release>, Option<String>), anyhow::Error> {
+    let client = Client::new();
+    let release_url = format!("https://api.github.com/repos/{}/releases", GITHUB_REPO);
+    let mut request = client.get(&release_url).header("User-Agent", "suiup");
+
+    // Add authorization header if token is provided
+    if let Some(token) = github_token {
+        request = request.header("Authorization", format!("token {}", token));
+    }
+
+    // Add ETag for caching
+    if let Ok(etag) = read_etag_file() {
+        request = request.header(IF_NONE_MATCH, etag);
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| anyhow!("Could not send request: {e}"))?;
+
+    // note this only works with authenticated requests. Should add support for that later.
+    if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+        // If nothing has changed, return an empty list and the existing ETag
+        if let Some((releases, etag)) = load_cached_release_list()
+            .map_err(|e| anyhow!("Cannot load release list from cache: {e}"))?
+        {
+            return Ok((releases, Some(etag)));
+        }
+    }
+
+    let etag = response
+        .headers()
+        .get(ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+    let response = response.error_for_status();
+    if let Err(ref e) = response {
+        bail!("Response error: {e}");
+    }
+    let releases: Vec<Release> = response.unwrap().json().await?;
+    save_release_list(&releases, etag.clone())?;
+
+    Ok((releases, etag))
+}
+
+fn read_etag_file() -> Result<String, anyhow::Error> {
+    let etag_file = get_suiup_cache_dir().join("etag.txt");
+    if etag_file.exists() {
+        let etag = std::fs::read_to_string(&etag_file)
+            .map_err(|_| anyhow!("Cannot read from file {}", etag_file.display()));
+        etag
+    } else {
+        Ok("".to_string())
+    }
+}
+
+/// Finds the last release for a given network
+pub async fn find_last_release_by_network(
+    releases: Vec<Release>,
+    network: &str,
+) -> Option<Release> {
+    releases
+        .into_iter()
+        .find(|r| r.assets.iter().any(|a| a.name.contains(network)))
+}
+
+fn save_release_list(releases: &[Release], etag: Option<String>) -> Result<(), anyhow::Error> {
+    println!("Saving releases list to cache");
+    let cache_dir = get_suiup_cache_dir();
+    std::fs::create_dir_all(&cache_dir).expect("Could not create cache directory");
+
+    let cache_file = cache_dir.join("releases.json");
+    let etag_file = cache_dir.join("etag.txt");
+
+    let cache_content =
+        serde_json::to_string_pretty(releases).expect("Could not serialize releases file: {}");
+
+    std::fs::write(&cache_file, cache_content).map_err(|_| {
+        anyhow!(
+            "Could not write cache releases file: {}",
+            cache_file.display(),
+        )
+    })?;
+    if let Some(etag) = etag {
+        std::fs::write(&etag_file, etag)
+            .map_err(|_| anyhow!("Could not write ETag file: {}", etag_file.display()))?;
+    }
+    Ok(())
+}
+
+fn load_cached_release_list() -> Result<Option<(Vec<Release>, String)>, anyhow::Error> {
+    let cache_file = get_suiup_cache_dir().join("releases.json");
+    let etag_file = get_suiup_cache_dir().join("etag.txt");
+
+    if cache_file.exists() && etag_file.exists() {
+        println!("Loading releases list from cache");
+        let cache_content: Vec<Release> = serde_json::from_str(
+            &std::fs::read_to_string(&cache_file)
+                .map_err(|_| anyhow!("Cannot read from file {}", cache_file.display()))?,
+        )
+        .map_err(|_| {
+            anyhow!(
+                "Cannot deserialize the releases cached file {}",
+                cache_file.display()
+            )
+        })?;
+        let etag_content = std::fs::read_to_string(&etag_file)
+            .map_err(|_| anyhow!("Cannot read from file {}", etag_file.display()))?;
+
+        Ok(Some((cache_content, etag_content)))
+    } else {
+        Ok(None)
+    }
+}
+
+pub async fn last_release_for_network<'a>(
+    releases: &'a [Release],
+    network: &'a str,
+) -> Result<(&'a str, String), Error> {
+    if let Some(release) = releases
+        .iter()
+        .find(|r| r.assets.iter().any(|a| a.name.contains(network)))
+    {
+        Ok((
+            network,
+            extract_version_from_release(release.assets[0].name.as_str())?,
+        ))
+    } else {
+        bail!("No release found for {network}")
+    }
+}

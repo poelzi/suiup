@@ -11,8 +11,6 @@ use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
-use reqwest::header::ETAG;
-use reqwest::header::IF_NONE_MATCH;
 use reqwest::header::USER_AGENT;
 use reqwest::Client;
 use std::collections::HashMap;
@@ -37,6 +35,11 @@ use crate::commands::BinaryName;
 use crate::commands::CommandMetadata;
 use crate::commands::ComponentCommands;
 use crate::commands::DefaultCommands;
+use crate::handlers::release::{
+    find_last_release_by_network, last_release_for_network, release_list,
+};
+use crate::handlers::version::extract_version_from_release;
+use crate::handlers::GITHUB_REPO;
 use crate::mvr;
 use crate::paths::*;
 use crate::types::Binaries;
@@ -44,7 +47,6 @@ use crate::types::BinaryVersion;
 use crate::types::InstalledBinaries;
 use crate::types::Release;
 use crate::types::Version;
-use crate::{GITHUB_REPO, RELEASES_ARCHIVES_FOLDER};
 use std::cmp::min;
 use std::env;
 
@@ -697,127 +699,6 @@ pub fn handle_which() -> Result<(), Error> {
     Ok(())
 }
 
-/// Fetches the list of releases from the GitHub repository
-pub(crate) async fn release_list(
-    github_token: Option<String>,
-) -> Result<(Vec<Release>, Option<String>), anyhow::Error> {
-    let client = Client::new();
-    let release_url = format!("https://api.github.com/repos/{}/releases", GITHUB_REPO);
-    let mut request = client.get(&release_url).header("User-Agent", "suiup");
-
-    // Add authorization header if token is provided
-    if let Some(token) = github_token {
-        request = request.header("Authorization", format!("token {}", token));
-    }
-
-    // Add ETag for caching
-    if let Ok(etag) = read_etag_file() {
-        request = request.header(IF_NONE_MATCH, etag);
-    }
-
-    let response = request.send().await?;
-
-    // note this only works with authenticated requests. Should add support for that later.
-    if response.status() == reqwest::StatusCode::NOT_MODIFIED {
-        // If nothing has changed, return an empty list and the existing ETag
-        if let Some((releases, etag)) = load_cached_release_list()
-            .map_err(|e| anyhow!("Cannot load release list from cache: {e}"))?
-        {
-            return Ok((releases, Some(etag)));
-        }
-    }
-
-    let etag = response
-        .headers()
-        .get(ETAG)
-        .and_then(|v| v.to_str().ok())
-        .map(String::from);
-    let response = response.error_for_status();
-    if let Err(ref e) = response {
-        bail!("Error: {e}");
-    }
-    let releases: Vec<Release> = response.unwrap().json().await?;
-    save_release_list(&releases, etag.clone())?;
-
-    Ok((releases, etag))
-}
-
-fn cache_path() -> PathBuf {
-    let cache_dir = dirs::cache_dir().expect("Could not find cache directory");
-    if !cache_dir.exists() {
-        std::fs::create_dir_all(&cache_dir.join("suiup"))
-            .expect("Could not create cache directory");
-    }
-    cache_dir.join("suiup")
-}
-
-fn load_cached_release_list() -> Result<Option<(Vec<Release>, String)>, anyhow::Error> {
-    let cache_file = cache_path().join("releases.json");
-    let etag_file = cache_path().join("etag.txt");
-
-    if cache_file.exists() && etag_file.exists() {
-        println!("Loading releases list from cache");
-        let cache_content: Vec<Release> = serde_json::from_str(
-            &std::fs::read_to_string(&cache_file)
-                .map_err(|_| anyhow!("Cannot read from file {}", cache_file.display()))?,
-        )
-        .map_err(|_| {
-            anyhow!(
-                "Cannot deserialize the releases cached file {}",
-                cache_file.display()
-            )
-        })?;
-        let etag_content = std::fs::read_to_string(&etag_file)
-            .map_err(|_| anyhow!("Cannot read from file {}", etag_file.display()))?;
-
-        Ok(Some((cache_content, etag_content)))
-    } else {
-        Ok(None)
-    }
-}
-
-fn save_release_list(releases: &[Release], etag: Option<String>) -> Result<(), anyhow::Error> {
-    println!("Saving releases list to cache");
-    let cache_dir = cache_path();
-    std::fs::create_dir_all(&cache_dir).expect("Could not create cache directory");
-
-    let cache_file = cache_dir.join("releases.json");
-    let etag_file = cache_dir.join("etag.txt");
-
-    let cache_content =
-        serde_json::to_string_pretty(releases).expect("Could not serialize releases file: {}");
-
-    std::fs::write(&cache_file, cache_content).map_err(|_| {
-        anyhow!(
-            "Could not write cache releases file: {}",
-            cache_file.display(),
-        )
-    })?;
-    if let Some(etag) = etag {
-        std::fs::write(&etag_file, etag)
-            .map_err(|_| anyhow!("Could not write ETag file: {}", etag_file.display()))?;
-    }
-    Ok(())
-}
-
-fn read_etag_file() -> Result<String, anyhow::Error> {
-    let etag_file = cache_path().join("etag.txt");
-    if etag_file.exists() {
-        let etag = std::fs::read_to_string(&etag_file)
-            .map_err(|_| anyhow!("Cannot read from file {}", etag_file.display()));
-        etag
-    } else {
-        Ok("".to_string())
-    }
-}
-
-/// Finds the last release for a given network
-async fn find_last_release_by_network(releases: Vec<Release>, network: &str) -> Option<Release> {
-    releases
-        .into_iter()
-        .find(|r| r.assets.iter().any(|a| a.name.contains(network)))
-}
-
 /// Detects the current OS and architecture
 pub fn detect_os_arch() -> Result<(String, String), Error> {
     let os = match whoami::platform() {
@@ -1032,7 +913,10 @@ fn extract_component(orig_binary: &str, network: String, filename: &str) -> Resu
     let binary = format!("{}.exe", orig_binary);
 
     // Check if the current entry matches the file name
-    for file in archive.entries()? {
+    for file in archive
+        .entries()
+        .map_err(|e| anyhow!("Cannot iterate through archive entries: {e}"))?
+    {
         let mut f = file.unwrap();
         if f.path()?.file_name().map(|x| x.to_str()).flatten() == Some(&binary) {
             println!("Extracting file: {}", &binary);
@@ -1049,15 +933,28 @@ fn extract_component(orig_binary: &str, network: String, filename: &str) -> Resu
             #[cfg(windows)]
             output_path.push(&format!("{}.exe", binary_version));
 
-            let mut output_file = File::create(&output_path)?;
+            let mut output_file = File::create(&output_path).map_err(|e| {
+                anyhow!(
+                    "Cannot create output path ({}) for extracting this file {binary_version}: {e}",
+                    output_path.display()
+                )
+            })?;
 
-            std::io::copy(&mut f, &mut output_file)?;
+            std::io::copy(&mut f, &mut output_file).map_err(|e| {
+                anyhow!("Cannot copy the file ({orig_binary}) into the output path: {e}")
+            })?;
             println!(" '{}' extracted successfully!", &binary);
             #[cfg(not(target_os = "windows"))]
             {
                 // Retrieve and apply the original file permissions on Unix-like systems
                 if let Ok(permissions) = f.header().mode() {
-                    set_permissions(output_path, PermissionsExt::from_mode(permissions))?;
+                    set_permissions(output_path, PermissionsExt::from_mode(permissions)).map_err(
+                        |e| {
+                            anyhow!(
+                                "Cannot apply the original file permissions in a unix system: {e}"
+                            )
+                        },
+                    )?;
                 }
             }
             break;
@@ -1067,38 +964,18 @@ fn extract_component(orig_binary: &str, network: String, filename: &str) -> Resu
     Ok(())
 }
 
-/// Extracts the version from a release filename
-pub(crate) fn extract_version_from_release(release: &str) -> Result<String, Error> {
-    let re = regex::Regex::new(r"v\d+\.\d+\.\d+").unwrap();
-    let captures = re
-        .captures(release)
-        .ok_or_else(|| anyhow!("Could not extract version from release"))?;
-
-    Ok(captures.get(0).unwrap().as_str().to_string())
-}
-
 /// Returns the path to the default binaries folder. The folder is created if it does not exist.
 fn default_bin_folder() -> Result<PathBuf, anyhow::Error> {
     let path = get_default_bin_dir();
     if !path.is_dir() {
         std::fs::create_dir_all(path.as_path())
-            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
+            .map_err(|e| anyhow!("Could not create directory {}: {e}", path.display()))?;
     }
 
     Ok(path)
 }
 
 /// Returns the path to the releases archives folder. The folder is created if it does not exist.
-/// This is used to cache the release archives.
-pub fn release_archive_folder() -> Result<PathBuf, anyhow::Error> {
-    let mut path = get_suiup_cache_dir();
-    path.push(RELEASES_ARCHIVES_FOLDER);
-    if !path.is_dir() {
-        std::fs::create_dir_all(path.as_path())
-            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
-    }
-    Ok(path)
-}
 
 /// Returns the path to the binaries folder. The folder is created if it does not exist.
 pub fn binaries_folder() -> Result<PathBuf, anyhow::Error> {
@@ -1106,7 +983,7 @@ pub fn binaries_folder() -> Result<PathBuf, anyhow::Error> {
     path.push("binaries");
     if !path.is_dir() {
         std::fs::create_dir_all(path.as_path())
-            .map_err(|e| anyhow!("Could not create directory {} due to {e}", path.display()))?;
+            .map_err(|e| anyhow!("Could not create directory {}: {e}", path.display()))?;
     }
     Ok(path)
 }
@@ -1161,7 +1038,9 @@ fn update_after_install(
                 };
 
                 if !binary_folder.exists() {
-                    std::fs::create_dir_all(&binary_folder)?;
+                    std::fs::create_dir_all(&binary_folder).map_err(|e| {
+                        anyhow!("Cannot create folder {}: {e}", binary_folder.display())
+                    })?;
                 }
 
                 #[cfg(target_os = "windows")]
@@ -1185,7 +1064,7 @@ fn update_after_install(
 
                 std::fs::copy(&src, &dst).map_err(|e| {
                     anyhow!(
-                        "Error copying the binary to the default folder (src: {}, dst: {}): {e}",
+                        "Error copying {binary} to the default folder (src: {}, dst: {}): {e}",
                         src.display(),
                         dst.display()
                     )
@@ -1320,23 +1199,6 @@ pub(crate) fn initialize() -> Result<(), Error> {
     default_file_path()?;
     installed_binaries_file()?;
     Ok(())
-}
-
-pub(crate) async fn last_release_for_network<'a>(
-    releases: &'a [Release],
-    network: &'a str,
-) -> Result<(&'a str, String), Error> {
-    if let Some(release) = releases
-        .iter()
-        .find(|r| r.assets.iter().any(|a| a.name.contains(network)))
-    {
-        Ok((
-            network,
-            extract_version_from_release(release.assets[0].name.as_str())?,
-        ))
-    } else {
-        bail!("No release found for {network}")
-    }
 }
 
 fn check_cargo_rust_installed() -> Result<(), Error> {

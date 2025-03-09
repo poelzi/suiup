@@ -10,14 +10,12 @@ use handle_commands::{handle_component, handle_default, handle_show, handle_upda
 
 mod commands;
 mod handle_commands;
+mod handlers;
 mod mvr;
 mod paths;
 mod types;
 mod walrus;
 use commands::{Commands, ComponentCommands, Suiup};
-
-const GITHUB_REPO: &str = "MystenLabs/sui";
-const RELEASES_ARCHIVES_FOLDER: &str = "releases";
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
