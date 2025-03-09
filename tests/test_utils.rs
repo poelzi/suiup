@@ -118,7 +118,7 @@ impl TestEnv {
             "Something went wrong, release archives for test data are missing"
         );
 
-        let releases_dir = self.cache_dir.join("releases");
+        let releases_dir = self.cache_dir.join("suiup").join("releases");
         std::fs::create_dir_all(&releases_dir)?;
 
         std::fs::copy(
