@@ -278,8 +278,4 @@ mod tests {
 
         Ok(())
     }
-
-    fn test_installing_nightly_debug() {
-        // for example installing mvr --nightly --debug fails
-    }
 }

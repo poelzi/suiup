@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use anyhow::Error;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
+
+use crate::handlers::RELEASES_ARCHIVES_FOLDER;
+use crate::types::InstalledBinaries;
 
 #[cfg(not(windows))]
 const XDG_DATA_HOME: &str = "XDG_DATA_HOME";
@@ -17,8 +19,6 @@ const XDG_CONFIG_HOME: &str = "XDG_CONFIG_HOME";
 const XDG_CACHE_HOME: &str = "XDG_CACHE_HOME";
 #[cfg(not(windows))]
 const HOME: &str = "HOME";
-
-pub const RELEASES_ARCHIVES_FOLDER: &str = "releases";
 
 pub fn get_data_home() -> PathBuf {
     #[cfg(windows)]
@@ -154,17 +154,16 @@ pub fn installed_binaries_file() -> Result<PathBuf, Error> {
     let path = get_config_file("installed_binaries.json");
     if !path.exists() {
         // We'll need to adjust this reference after moving more code
-        crate::types::InstalledBinaries::create_file(&path)?;
+        InstalledBinaries::create_file(&path)?;
     }
     Ok(path)
 }
 
-pub fn release_archive_folder() -> Result<PathBuf, anyhow::Error> {
-    let mut path = get_suiup_cache_dir();
-    path.push(RELEASES_ARCHIVES_FOLDER);
-    if !path.is_dir() {
-        std::fs::create_dir_all(path.as_path())
-            .map_err(|e| anyhow!("Could not create directory {}: {e}", path.display()))?;
-    }
-    Ok(path)
+pub fn release_archive_dir() -> PathBuf {
+    get_suiup_cache_dir().join(RELEASES_ARCHIVES_FOLDER)
+}
+
+/// Returns the path to the binaries folder
+pub fn binaries_dir() -> PathBuf {
+    get_suiup_data_dir().join("binaries")
 }

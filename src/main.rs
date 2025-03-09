@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Error;
-use clap::CommandFactory;
 use clap::Parser;
-
-use handle_commands::initialize;
-use handle_commands::{handle_component, handle_default, handle_show, handle_update, handle_which};
 
 mod commands;
 mod handle_commands;
@@ -16,6 +12,25 @@ mod paths;
 mod types;
 mod walrus;
 use commands::{Commands, ComponentCommands, Suiup};
+use handle_commands::handle_cmd;
+use handlers::default::handle_default;
+use handlers::show::handle_show;
+use handlers::update::handle_update;
+use handlers::which::handle_which;
+use paths::*;
+use std::fs::create_dir_all;
+
+fn initialize() -> Result<(), Error> {
+    create_dir_all(get_suiup_config_dir())?;
+    create_dir_all(get_suiup_data_dir())?;
+    create_dir_all(get_suiup_cache_dir())?;
+    create_dir_all(binaries_dir())?;
+    create_dir_all(release_archive_dir())?;
+    create_dir_all(get_default_bin_dir())?;
+    default_file_path()?;
+    installed_binaries_file()?;
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -31,7 +46,7 @@ async fn main() -> Result<(), Error> {
             debug,
             yes,
         } => {
-            handle_component(
+            handle_cmd(
                 ComponentCommands::Add {
                     components,
                     nightly,
@@ -43,24 +58,12 @@ async fn main() -> Result<(), Error> {
             .await?
         }
         Commands::Remove { binary } => {
-            handle_component(ComponentCommands::Remove { binary }, github_token).await?
+            handle_cmd(ComponentCommands::Remove { binary }, github_token).await?
         }
-        Commands::List => handle_component(ComponentCommands::List, github_token).await?,
+        Commands::List => handle_cmd(ComponentCommands::List, github_token).await?,
         Commands::Show => handle_show()?,
         Commands::Update { name, yes } => handle_update(name, yes, github_token).await?,
         Commands::Which => handle_which()?,
-        Commands::Completion { shell } => {
-            let mut cmd = Suiup::command();
-            // Generate to string first to validate the output
-            let mut buf = Vec::new();
-            clap_complete::generate(shell, &mut cmd, "suiup", &mut buf);
-
-            // Print to stdout if generation was successful
-            if let Ok(s) = String::from_utf8(buf) {
-                print!("{}", s);
-            }
-            // print_completion_instructions(&shell);
-        }
     }
     Ok(())
 }

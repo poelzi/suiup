@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Error};
 
 /// Extracts the version from a release filename
-pub(crate) fn extract_version_from_release(release: &str) -> Result<String, Error> {
+pub fn extract_version_from_release(release: &str) -> Result<String, Error> {
     let re = regex::Regex::new(r"v\d+\.\d+\.\d+").unwrap();
     let captures = re
         .captures(release)

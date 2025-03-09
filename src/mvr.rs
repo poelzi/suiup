@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::handle_commands::{binaries_folder, detect_os_arch, download_file};
+// use crate::handle_commands::{binaries_folder, detect_os_arch, download_file};
+use crate::{
+    handlers::download::{detect_os_arch, download_file},
+    paths::binaries_dir,
+};
 use anyhow::{anyhow, Error};
 use reqwest::Client;
 use serde::Deserialize;
@@ -71,7 +75,7 @@ impl MvrInstaller {
             latest_release
         };
 
-        let cache_folder = binaries_folder()?.join("standalone");
+        let cache_folder = binaries_dir().join("standalone");
         if !cache_folder.exists() {
             std::fs::create_dir_all(&cache_folder)?;
         }

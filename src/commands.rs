@@ -21,7 +21,7 @@ pub(crate) struct Suiup {
 }
 
 #[derive(Subcommand)]
-pub(crate) enum Commands {
+pub enum Commands {
     #[command(subcommand, about = "Get or set the default tool version")]
     Default(DefaultCommands),
     #[command(about = "Install one or more binaries")]
@@ -74,15 +74,15 @@ pub(crate) enum Commands {
     #[command(about = "Show the path where default binaries are installed")]
     Which,
     // #[command(about = "Generate shell completion scripts", skip)]
-    #[command(skip)]
-    Completion {
-        #[arg(value_enum)]
-        shell: clap_complete::Shell,
-    },
+    // #[command(skip)]
+    // Completion {
+    //     #[arg(value_enum)]
+    //     shell: clap_complete::Shell,
+    // },
 }
 
 #[derive(Subcommand)]
-pub(crate) enum ComponentCommands {
+pub enum ComponentCommands {
     #[command(about = "List available binaries to install")]
     List,
     #[command(about = "Add one or more binaries")]
@@ -119,7 +119,7 @@ pub(crate) enum ComponentCommands {
 }
 
 #[derive(Debug, Subcommand)]
-pub(crate) enum DefaultCommands {
+pub enum DefaultCommands {
     #[command(about = "Get the default Sui CLI version")]
     Get,
     #[command(about = "Set the default Sui CLI version")]
