@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Error};
+use std::io::Write;
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
@@ -74,8 +75,10 @@ impl InstalledBinaries {
         let binaries = InstalledBinaries { binaries: vec![] };
         let s = serde_json::to_string_pretty(&binaries)
             .map_err(|e| anyhow!("Cannot serialize the installed binaries to file: {e}"))?;
-        std::fs::write(path, s)
-            .map_err(|e| anyhow!("Cannot write the installed binaries file: {e}"))?;
+        let mut file = std::fs::File::create(path)
+            .map_err(|e| anyhow!("Cannot create this file {}: {e}", path.display()))?;
+        file.write_all(s.as_bytes())
+            .map_err(|e| anyhow!("Cannot write to {}: {e}", path.display()))?;
         Ok(())
     }
 
