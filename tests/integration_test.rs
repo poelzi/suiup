@@ -233,7 +233,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_default_workflow_with_mvr() -> Result<(), anyhow::Error> {
+    async fn test_default_mvr_workflow() -> Result<(), anyhow::Error> {
         let test_env = TestEnv::new()?;
 
         // Install last version and nightly
