@@ -7,7 +7,7 @@ use crate::{
     paths::binaries_dir,
 };
 use anyhow::{anyhow, Error};
-use reqwest::Client;
+use reqwest::blocking::Client;
 use serde::Deserialize;
 
 const MVR_REPO: &str = "MystenLabs/mvr";
@@ -35,7 +35,7 @@ impl MvrInstaller {
         }
     }
 
-    pub async fn get_releases(&mut self) -> Result<(), Error> {
+    pub fn get_releases(&mut self) -> Result<(), Error> {
         let client = Client::new();
         let url = format!("https://api.github.com/repos/{}/releases", MVR_REPO);
 
@@ -46,15 +46,13 @@ impl MvrInstaller {
         let releases: Vec<MvrRelease> = client
             .get(&url)
             .header("User-Agent", "suiup")
-            .send()
-            .await?
-            .json()
-            .await?;
+            .send()?
+            .json()?;
         self.releases = releases;
         Ok(())
     }
 
-    pub async fn get_latest_release(&self) -> Result<&MvrRelease, Error> {
+    pub fn get_latest_release(&self) -> Result<&MvrRelease, Error> {
         println!("Downloading release list");
         let releases = &self.releases;
         releases
@@ -68,9 +66,9 @@ impl MvrInstaller {
             v
         } else {
             if self.releases.is_empty() {
-                self.get_releases().await?;
+                self.get_releases()?;
             }
-            let latest_release = self.get_latest_release().await?.tag_name.clone();
+            let latest_release = self.get_latest_release()?.tag_name.clone();
             println!("No version specified. Downloading latest release: {latest_release}");
             latest_release
         };
@@ -86,7 +84,7 @@ impl MvrInstaller {
         }
 
         if self.releases.is_empty() {
-            self.get_releases().await?;
+            self.get_releases()?;
         }
 
         let release = self

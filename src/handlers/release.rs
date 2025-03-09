@@ -3,7 +3,6 @@ use anyhow::bail;
 use anyhow::Error;
 use reqwest::header::ETAG;
 use reqwest::header::IF_NONE_MATCH;
-use reqwest::Client;
 
 use crate::handlers::version::extract_version_from_release;
 use crate::handlers::GITHUB_REPO;
@@ -14,8 +13,8 @@ use crate::types::Release;
 pub async fn release_list(
     github_token: Option<String>,
 ) -> Result<(Vec<Release>, Option<String>), anyhow::Error> {
-    let client = Client::new();
     let release_url = format!("https://api.github.com/repos/{}/releases", GITHUB_REPO);
+    let client = reqwest::blocking::Client::new();
     let mut request = client.get(&release_url).header("User-Agent", "suiup");
 
     // Add authorization header if token is provided
@@ -30,7 +29,6 @@ pub async fn release_list(
 
     let response = request
         .send()
-        .await
         .map_err(|e| anyhow!("Could not send request: {e}"))?;
 
     // note this only works with authenticated requests. Should add support for that later.
@@ -52,7 +50,7 @@ pub async fn release_list(
     if let Err(ref e) = response {
         bail!("Response error: {e}");
     }
-    let releases: Vec<Release> = response.unwrap().json().await?;
+    let releases: Vec<Release> = response.unwrap().json()?;
     save_release_list(&releases, etag.clone())?;
 
     Ok((releases, etag))
