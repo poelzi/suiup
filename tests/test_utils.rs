@@ -7,10 +7,11 @@ use std::path::PathBuf;
 use std::{env, sync::Mutex};
 use suiup::paths::{
     get_cache_home, get_config_home, get_data_home, get_default_bin_dir, get_suiup_cache_dir,
-    get_suiup_config_dir, get_suiup_data_dir, installed_binaries_file,
+    get_suiup_config_dir, get_suiup_data_dir, initialize, installed_binaries_file,
 };
 use tempfile::TempDir;
 
+#[derive(Debug)]
 pub struct TestEnv {
     pub temp_dir: TempDir,
     pub data_dir: PathBuf,
@@ -66,11 +67,10 @@ impl TestEnv {
         std::fs::create_dir_all(&cache_dir)?;
         std::fs::create_dir_all(&bin_dir)?;
 
-        assert!(get_suiup_cache_dir().exists());
-        assert!(get_suiup_config_dir().exists());
-        assert!(get_default_bin_dir().exists());
-        assert!(get_suiup_data_dir().exists());
-        assert!(installed_binaries_file().unwrap().exists());
+        assert!(data_dir.exists());
+        assert!(config_dir.exists());
+        assert!(cache_dir.exists());
+        assert!(bin_dir.exists());
 
         // Store original env vars
         let vars_to_capture = vec![
@@ -104,6 +104,10 @@ impl TestEnv {
             bin_dir,
             original_env,
         })
+    }
+
+    pub fn initialize_paths(&self) -> Result<(), anyhow::Error> {
+        initialize()
     }
 
     pub fn copy_testnet_releases_to_cache(&self) -> Result<()> {

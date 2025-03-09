@@ -9,6 +9,7 @@ mod tests {
     use anyhow::Result;
     use assert_cmd::Command;
     use predicates::prelude::*;
+    use suiup::paths::installed_binaries_file;
 
     #[cfg(not(windows))]
     const DATA_HOME: &str = "XDG_DATA_HOME";
@@ -42,6 +43,7 @@ mod tests {
     #[tokio::test]
     async fn test_install_flags() -> Result<()> {
         let test_env = TestEnv::new()?;
+        test_env.initialize_paths()?;
 
         // NOT OK: nightly + version specified
         let mut cmd = suiup_command(
@@ -69,6 +71,7 @@ mod tests {
     #[tokio::test]
     async fn test_install_and_use_binary() -> Result<()> {
         let test_env = TestEnv::new()?;
+        test_env.initialize_paths()?;
         test_env.copy_testnet_releases_to_cache()?;
 
         // Run install command
@@ -104,6 +107,7 @@ mod tests {
     #[tokio::test]
     async fn test_install_debug() -> Result<()> {
         let test_env = TestEnv::new()?;
+        test_env.initialize_paths()?;
         test_env.copy_testnet_releases_to_cache()?;
 
         // Run install command
@@ -150,6 +154,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_workflow() -> Result<()> {
         let test_env = TestEnv::new()?;
+        test_env.initialize_paths()?;
 
         // Install older version
         let mut cmd = suiup_command(vec!["install", "mvr", "v0.0.4", "-y"], &test_env);
@@ -181,6 +186,7 @@ mod tests {
     #[tokio::test]
     async fn test_default_workflow() -> Result<(), anyhow::Error> {
         let test_env = TestEnv::new()?;
+        test_env.initialize_paths()?;
         test_env.copy_testnet_releases_to_cache()?;
 
         // Install 1.39.3
@@ -235,10 +241,12 @@ mod tests {
     #[tokio::test]
     async fn test_default_mvr_workflow() -> Result<(), anyhow::Error> {
         let test_env = TestEnv::new()?;
+        test_env.initialize_paths()?;
 
         // Install last version and nightly
         let mut cmd = suiup_command(vec!["install", "mvr", "-y"], &test_env);
         cmd.assert().success();
+        assert!(installed_binaries_file().unwrap().exists());
 
         let default_mvr_binary = test_env.bin_dir.join("mvr");
         let version_cmd = Command::new(&default_mvr_binary)

@@ -20,18 +20,6 @@ use handlers::which::handle_which;
 use paths::*;
 use std::fs::create_dir_all;
 
-fn initialize() -> Result<(), Error> {
-    create_dir_all(get_suiup_config_dir())?;
-    create_dir_all(get_suiup_data_dir())?;
-    create_dir_all(get_suiup_cache_dir())?;
-    create_dir_all(binaries_dir())?;
-    create_dir_all(release_archive_dir())?;
-    create_dir_all(get_default_bin_dir())?;
-    default_file_path()?;
-    installed_binaries_file()?;
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     initialize()?;

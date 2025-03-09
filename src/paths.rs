@@ -4,7 +4,7 @@
 use anyhow::Error;
 use std::collections::HashMap;
 use std::env;
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -166,4 +166,16 @@ pub fn release_archive_dir() -> PathBuf {
 /// Returns the path to the binaries folder
 pub fn binaries_dir() -> PathBuf {
     get_suiup_data_dir().join("binaries")
+}
+
+pub fn initialize() -> Result<(), Error> {
+    create_dir_all(get_suiup_config_dir())?;
+    create_dir_all(get_suiup_data_dir())?;
+    create_dir_all(get_suiup_cache_dir())?;
+    create_dir_all(binaries_dir())?;
+    create_dir_all(release_archive_dir())?;
+    create_dir_all(get_default_bin_dir())?;
+    default_file_path()?;
+    installed_binaries_file()?;
+    Ok(())
 }
