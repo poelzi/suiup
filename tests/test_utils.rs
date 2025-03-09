@@ -26,15 +26,41 @@ impl TestEnv {
 
         let home_dir = dirs::home_dir().unwrap();
 
-        let data_dir = base.join(get_data_home().strip_prefix(&home_dir).unwrap());
-        let config_dir = base.join(get_config_home().strip_prefix(&home_dir).unwrap());
-        let cache_dir = base.join(get_cache_home().strip_prefix(&home_dir).unwrap());
-        let bin_dir = base.join(get_default_bin_dir().strip_prefix(&home_dir).unwrap());
+        let data_home = get_data_home();
+        let config_home = get_config_home();
+        let cache_home = get_cache_home();
+        let bin_home = get_default_bin_dir();
+
+        let data_dir = if let Some(path) = data_home.strip_prefix(&home_dir).ok() {
+            base.join(path)
+        } else {
+            base.join(data_home)
+        };
+
+        let config_dir = if let Some(path) = config_home.strip_prefix(&home_dir).ok() {
+            base.join(path)
+        } else {
+            base.join(config_home)
+        };
+
+        let cache_dir = if let Some(path) = cache_home.strip_prefix(&home_dir).ok() {
+            base.join(path)
+        } else {
+            base.join(cache_home)
+        };
+
+        let bin_dir = if let Some(path) = bin_home.strip_prefix(&home_dir).ok() {
+            base.join(path)
+        } else {
+            base.join(bin_home)
+        };
 
         println!("Data dir: {}", data_dir.display());
         println!("Config dir: {}", config_dir.display());
         println!("Cache dir: {}", cache_dir.display());
-        println!("Bin dir: {}", bin_dir.display()); // Create directories
+        println!("Bin dir: {}", bin_dir.display());
+
+        // Create directories
         std::fs::create_dir_all(&data_dir)?;
         std::fs::create_dir_all(&config_dir)?;
         std::fs::create_dir_all(&cache_dir)?;
