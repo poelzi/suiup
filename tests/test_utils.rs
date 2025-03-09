@@ -4,10 +4,7 @@
 use anyhow::Result;
 use std::env;
 use std::path::PathBuf;
-use suiup::paths::{
-    get_cache_home, get_config_home, get_data_home, get_default_bin_dir, get_suiup_cache_dir,
-    get_suiup_config_dir, get_suiup_data_dir,
-};
+use suiup::paths::{get_cache_home, get_config_home, get_data_home, get_default_bin_dir};
 use tempfile::TempDir;
 
 pub struct TestEnv {
@@ -54,11 +51,6 @@ impl TestEnv {
         } else {
             base.join(bin_home)
         };
-
-        println!("Data dir: {}", data_dir.display());
-        println!("Config dir: {}", config_dir.display());
-        println!("Cache dir: {}", cache_dir.display());
-        println!("Bin dir: {}", bin_dir.display());
 
         // Create directories
         std::fs::create_dir_all(&data_dir)?;
