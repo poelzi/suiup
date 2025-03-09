@@ -14,6 +14,7 @@ pub(crate) struct Suiup {
     #[arg(
         long = "github-token",
         help = "GitHub API token for authenticated requests (helps avoid rate limits)",
+        env = "GITHUB_TOKEN",
         global = true
     )]
     pub github_token: Option<String>,
