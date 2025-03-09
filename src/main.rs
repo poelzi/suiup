@@ -18,7 +18,6 @@ use handlers::show::handle_show;
 use handlers::update::handle_update;
 use handlers::which::handle_which;
 use paths::*;
-use std::fs::create_dir_all;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {

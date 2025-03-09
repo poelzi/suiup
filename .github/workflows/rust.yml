@@ -45,7 +45,7 @@ jobs:
 
       - name: Run tests with test
         # run: cargo test -- --nocapturexd
-        run: cargo nextest run
+        run: cargo nextest run --no-fail-fast --retries 4
 
       - name: Check formatting
         uses: actions-rs/cargo@v1

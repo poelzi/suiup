@@ -6,8 +6,7 @@ use lazy_static::lazy_static;
 use std::path::PathBuf;
 use std::{env, sync::Mutex};
 use suiup::paths::{
-    get_cache_home, get_config_home, get_data_home, get_default_bin_dir, get_suiup_cache_dir,
-    get_suiup_config_dir, get_suiup_data_dir, initialize, installed_binaries_file,
+    get_cache_home, get_config_home, get_data_home, get_default_bin_dir, initialize,
 };
 use tempfile::TempDir;
 
