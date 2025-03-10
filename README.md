@@ -49,20 +49,20 @@ cargo install https://github.com/Mystenlabs/suiup.git --locked
 suiup install sui
 ```
 
-### Install `sui` with specific network-version
+### Install `sui` with specific network (and version)
 ```bash
-suiup install sui testnet-v1.40.1
 suiup install sui devnet # this will install the latest available devnet release
+suiup install sui testnet-v1.40.1 # this will install the testnet v1.40.1 release
 ```
 
 ### Update `sui` to latest version
-This will check for newer releases of those that are already installed, and try to download the new ones. Recommended to specify which release to update
+This will check for newer releases of those that are already installed, and tries to download the new ones. Recommended to specify which release to update.
 ```bash
 suiup update sui devnet # recommended
 suiup update sui
 ```
 
-### Install `mvr` -- this will install the latest available release of Move Registry CLI
+### Install `mvr` (Move Registry CLI)
 ```bash
 suiup install mvr
 suiup install mvr v0.0.8 # this will install the MVR CLI v0.0.8 release
@@ -126,6 +126,18 @@ suiup default set sui --nightly
 ### Using it in CI
 As the tool requires to download releases and files from GitHub, it is recommended to use a GitHub token to avoid rate limits. You can set the `GITHUB_TOKEN` environment variable to your GitHub token or pass in the `--github-token` argument.
 
+In the CI environment, you can set the `GITHUB_TOKEN` environment variable to your GitHub token, then you can run the `suiup` command as usual:
+```bash
+env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+steps:
+- name: Install sui
+  run: |
+    suiup install sui
+```
+
+Or if you're calling from shell:
 ```bash
 GITHUB_TOKEN=your_github_token suiup install sui
 ```
@@ -145,9 +157,9 @@ The tool uses these environment variables to store data.
 - `LOCALAPPDATA\bin` for storing default binaries to be used
 
 ## Known issues
-- `suiuo mvr --nightly` might fail on Windows because of issues with compiling the `mvr-cli` crate from the repository. Just install the latest release instead.
+- `suiup install mvr --nightly` might fail on **Windows** because of issues with compiling the `mvr-cli` crate from the repository. Just install the latest release instead.
 - `suiup remove` does not work well. Do not use it.
-- `suiup install walrus` will always install the latest binary. Need some work to properly support it!
+- `suiup install walrus` will always install the latest binary. Need some work to properly support Walrus CLI!
 
 ## Troubleshooting
 
