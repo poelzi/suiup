@@ -22,17 +22,17 @@ Please note that due to the different release mechanisms between these different
 
 # Installation
 
-** From Script**
+### From Script
 ```bash
 curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
 ```
 
-**From Cargo**
+### From Cargo
 ```bash
 cargo install https://github.com/Mystenlabs/suiup.git --locked
 ```
 
-**From Release**
+### From Release
 
 1. Download the latest release from [Releases](https://github.com/Mystenlabs/suiup/releases).
 2. Unzip the downloaded file.
@@ -44,41 +44,41 @@ cargo install https://github.com/Mystenlabs/suiup.git --locked
 > [!TIP]
 > Pass the `--yes` flag to skip confirmation prompts, thus accepting to updating the default binary to the one you are installing.
 
-**Install `sui` -- this will install the latest available testnet release**
+### Install `sui` -- this will install the latest available testnet release
 ```bash
 suiup install sui
 ```
 
-**Install `sui` with specific network-version**
+### Install `sui` with specific network-version
 ```bash
 suiup install sui testnet-v1.40.1
 suiup install sui devnet # this will install the latest available devnet release
 ```
 
-**Update `sui` to latest version**
+### Update `sui` to latest version
 This will check for newer releases of those that are already installed, and try to download the new ones. Recommended to specify which release to update
 ```bash
 suiup update sui devnet # recommended
 suiup update sui
 ```
 
-**Install `mvr` -- this will install the latest available release of Move Registry CLI**
+### Install `mvr` -- this will install the latest available release of Move Registry CLI
 ```bash
 suiup install mvr
 suiup install mvr v0.0.8 # this will install the MVR CLI v0.0.8 release
 ```
 
-**List available binaries to install**
+### List available binaries to install
 ```bash
 suiup list
 ```
 
-**Show installed versions**
+### Show installed versions
 ```bash
 suiup show
 ```
 
-**Switch between versions. Note that `default set` requires to specify a version!**
+### Switch between versions. Note that `default set` requires to specify a version!
 ```bash
 suiup default get
 suiup default set sui testnet-v1.40.0
@@ -86,7 +86,7 @@ suiup default set mvr v0.0.7
 suiup default set sui testnet-v1.40.0 --debug # set the default version to be the sui-debug binary
 ```
 
-**Show where the default binaries are installed**
+### Show where the default binaries are installed
 ```bash
 suiup which
 ```
@@ -103,7 +103,7 @@ Installing a nightly version is highly experimental and might not work as expect
 > [!IMPORTANT]
 > `--nightly` will replace the current nightly binary, if any. Currently, there's no support for multiple nightly versions. Hope to add it in the future!
 
-**Install from branch (requires cargo + rust installed!)**
+### Install from branch (requires cargo + rust installed!)
 ```bash
 suiup install mvr --nightly # installs from main if branch name is omitted
 suiup install mvr --nightly my_branch
@@ -113,17 +113,17 @@ suiup install mvr --nightly my_branch
 > - for `sui` binary, it will install the `sui-debug` binary from the release archive which contains debug symbols and it's required to run `sui move test --coverage`.
 > - for when using `--nightly`, it will build the binary from source with debug symbols. By default, `--nightly` builds in release mode as per `cargo install`'s defaults.
 
-**Install MVR from nightly in debug mode**
+### Install MVR from nightly in debug mode
 ```bash
 suiup install mvr --nightly --debug
 ```
 
-**Switch default versions**
+### Switch default versions
 ```bash
 suiup default set sui --nightly
 ```
 
-**Using it in CI**
+### Using it in CI
 As the tool requires to download releases and files from GitHub, it is recommended to use a GitHub token to avoid rate limits. You can set the `GITHUB_TOKEN` environment variable to your GitHub token or pass in the `--github-token` argument.
 
 ```bash
@@ -131,24 +131,26 @@ GITHUB_TOKEN=your_github_token suiup install sui
 ```
 
 ## Paths used by the `suiup` tool
-[Unix/MacOS]
+
+**[Unix/MacOS]**
 The tool uses these environment variables to store data.
 - `XDG_DATA_HOME`
 - `XDG_CACHE_HOME`
 - `XDG_CONFIG_HOME`
 - `HOME/.local/bin` for storing default binaries to be used. Make sure this is on your `PATH` or set up `SUIUP_DEFAULT_BIN_DIR` env variable to point to a different directory.
 
-[Windows]
+**[Windows]**
 - `LOCALAPPDATA` or `USERPROFILE\AppData\Local` for storing data
 - `TEMP` or `USERPROFILE\AppData\Local\Temp` for caching
 - `LOCALAPPDATA\bin` for storing default binaries to be used
 
 ## Known issues
-- building mvr --nightly might fail on Windows because of issues with compiling the `mvr-cli` crate from the repository. Just install the latest release instead.
+- `suiuo mvr --nightly` might fail on Windows because of issues with compiling the `mvr-cli` crate from the repository. Just install the latest release instead.
 - `suiup remove` does not work well. Do not use it.
 - `suiup install walrus` will always install the latest binary. Need some work to properly support it!
 
 ## Troubleshooting
 
-**Where are the default binaries copied to?**
+### Where are the default binaries copied to?
+
 For Unix/MacOS they are copied to `$HOME/.local/bin` (or where your `SUIUP_DEFAULT_BIN_DIR` env var points to) and for Windows they are copied to `LOCALAPPDATA\bin`. Make sure you have these folders on the `PATH`.
