@@ -42,13 +42,13 @@ jobs:
         toolchain:
           - stable
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
         with:
-          command: "build"
+          command: ${{ matrix.platform.command }}
           target: ${{ matrix.platform.target }}
-          toolchain: ${{ matrix.toolchain }}
           args: "--locked --release"
           strip: true
       - name: Publish artifacts and release
@@ -56,4 +56,3 @@ jobs:
         with:
           executable-name: suiup
           target: ${{ matrix.platform.target }}
-          action-gh-release-parameters: '{ "make_latest": false }'
