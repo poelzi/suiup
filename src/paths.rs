@@ -125,9 +125,14 @@ pub fn get_default_bin_dir() -> PathBuf {
 
     #[cfg(not(windows))]
     {
-        let path = PathBuf::from(env::var_os(HOME).expect("HOME not set"))
-            .join(".local")
-            .join("bin");
+        let path = env::var_os("SUIUP_DEFAULT_BIN_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let mut path = PathBuf::from(env::var_os(HOME).expect("HOME not set"));
+                path.push(".local");
+                path.push("bin");
+                path
+            });
         path
     }
 }

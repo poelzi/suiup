@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
     handlers::installed_binaries_grouped_by_network,
     paths::default_file_path,

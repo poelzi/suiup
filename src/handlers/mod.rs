@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::paths::{binaries_dir, get_default_bin_dir, release_archive_dir};
 use crate::{paths::default_file_path, types::Version};
 use anyhow::anyhow;

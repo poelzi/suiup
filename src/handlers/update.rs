@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::handlers::{
     available_components, installed_binaries_grouped_by_network,
     release::{last_release_for_network, release_list},

@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::handlers::release::find_last_release_by_network;
 use crate::handlers::version::extract_version_from_release;
 use crate::handlers::GITHUB_REPO;
