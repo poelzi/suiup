@@ -1,14 +1,31 @@
-[!WARNING] Highly experimental, use at your own risk. Not recommended for production use. No warranty is provided.
+> [!WARNING] 
+> Highly experimental, use at your own risk. Not recommended for production use. No warranty is provided.
 
 # Overview
-`suiup` is a tool to install and manage different versions of Sui CLI tools. It allows you to easily switch between different versions of the Sui CLI tools, such as `sui`, `mvr`, and `walrus`.
+`suiup` is a tool to install and manage different versions of CLI tools for working in the Sui ecosystem. It allows you to easily install and switch between different versions of `sui`, `mvr`, and limited support for `walrus`.
 
 Versions are specified in the format `network` and optionally a version (`-vX.Y.Z`) for `sui` (e.g., `testnet-v1.40.0`, `devnet`, `mainnet`) and `vX.Y.Z` for `mvr` (e.g., `v0.0.7`).
+`walrus` CLI is poorly supported at the time of writing.
 
-Please note that due to the different release mechanisms between these different tools, `suiup` does its best to make it simple to install them. 
+Please note that due to the different release mechanisms between these different tools, `suiup` does its best to make it simple to install them, but please read the examples below to understand how it works.
+
+# Supported OS
+
+| OS       | Architecture      | Status          |
+|----------|------------------|----------------|
+| Linux    | x86_64 (amd64)    | ✅ Supported   |
+| Linux    | aarch64 (ARM64)   | ✅ Supported   |
+| macOS    | x86_64 (amd64)    | ✅ Supported   |
+| macOS    | aarch64 (ARM64)   | ✅ Supported   |
+| Windows  | x86_64 (amd64)    | Limited support (might or might not work) |
+| Windows  | aarch64 (ARM64)   | Limited support (might or might not work) |
 
 # Installation
 
+** From Script**
+```bash
+curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
+```
 
 **From Cargo**
 ```bash
@@ -20,23 +37,28 @@ cargo install https://github.com/Mystenlabs/suiup.git --locked
 1. Download the latest release from [Releases](https://github.com/Mystenlabs/suiup/releases).
 2. Unzip the downloaded file.
 3. Add the `suiup` binary to folder that is on your `PATH` environment variable, or add that folder to the `PATH`.
+4. (Optional) restart your terminal if you made changes to your `PATH`.
 
 # Quick Start
+
+> [!NOTE]
+> Pass the `--yes` flag to skip confirmation prompts and select yes to updating the default binary to the one you are installing.
 
 **Install `sui` -- this will install the latest available testnet release**
 ```bash
 suiup install sui
 ```
 
-**Install `sui` with specific version**
+**Install `sui` with specific network-version**
 ```bash
-suiup install sui testnet-v1.40.0
+suiup install sui testnet-v1.40.1
 suiup install sui devnet # this will install the latest available devnet release
 ```
 
 **Update `sui` to latest version**
-This will update the `sui` binary to the latest available release for the current default binary. For example, if binary is a devnet release, it will update to the latest devnet release.
+This will check for newer releases of those that are already installed, and try to download the new ones. Recommended to specify which release to update
 ```bash
+suiup update sui devnet # recommended
 suiup update sui
 ```
 
@@ -77,18 +99,18 @@ suiup which
 
 Installing a nightly version is highly experimental and might not work as expected. Avoid using it unless you really need to.
 
-[!NOTE] 
-`--nightly` will replace the current nightly binary, if any. Currently, there's no support for multiple nightly versions. Hope to add it in the future!
+> [!NOTE]
+> `--nightly` will replace the current nightly binary, if any. Currently, there's no support for multiple nightly versions. Hope to add it in the future!
 
 **Install from branch (requires cargo + rust installed!)**
 ```bash
 suiup install mvr --nightly # installs from main if branch name is omitted
 suiup install mvr --nightly my_branch
 ```
-[!INFO]
-There is a `--debug` flag that can be used in two ways:
-- for `sui` binary, it will install the `sui-debug` binary from the release archive which contains debug symbols and it's required to run `sui move test --coverage`.
-- for when using `--nightly`, it will build the binary from source with debug symbols. By default, `--nightly` builds in release mode as per `cargo install`'s defaults.
+> [!NOTE]
+> There is a `--debug` flag that can be used in two ways:
+> - for `sui` binary, it will install the `sui-debug` binary from the release archive which contains debug symbols and it's required to run `sui move test --coverage`.
+> - for when using `--nightly`, it will build the binary from source with debug symbols. By default, `--nightly` builds in release mode as per `cargo install`'s defaults.
 
 **Install MVR from nightly in debug mode**
 ```bash
