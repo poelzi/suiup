@@ -11,8 +11,8 @@ Please note that due to the different release mechanisms between these different
 
 # Supported OS
 
-| OS       | Architecture      | Status          |
-|----------|------------------|----------------|
+| OS       | Architecture      | Status         |
+|----------|-------------------|----------------|
 | Linux    | x86_64 (amd64)    | ✅ Supported   |
 | Linux    | aarch64 (ARM64)   | ✅ Supported   |
 | macOS    | x86_64 (amd64)    | ✅ Supported   |
@@ -128,3 +128,21 @@ As the tool requires to download releases and files from GitHub, it is recommend
 ```bash
 GITHUB_TOKEN=your_github_token suiup install sui
 ```
+
+## Paths used by the `suiup` tool
+[Unix/MacOS]
+The tool uses these environment variables to store data.
+- `XDG_DATA_HOME`
+- `XDG_CACHE_HOME`
+- `XDG_CONFIG_HOME`
+- `HOME/.local/bin` for storing default binaries to be used. Make sure this is on your `PATH` or set up `SUIUP_DEFAULT_BIN_DIR` env variable to point to a different directory.
+
+[Windows]
+- `LOCALAPPDATA` or `USERPROFILE\AppData\Local` for storing data
+- `TEMP` or `USERPROFILE\AppData\Local\Temp` for caching
+- `LOCALAPPDATA\bin` for storing default binaries to be used
+
+## Troubleshooting
+
+**Where are the default binaries copied to?**
+For Unix/MacOS they are copied to `$HOME/.local/bin` (or where your `SUIUP_DEFAULT_BIN_DIR` env var points to) and for Windows they are copied to `LOCALAPPDATA\bin`. Make sure you have these folders on the `PATH`.
