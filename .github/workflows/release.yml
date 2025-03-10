@@ -1,106 +1,59 @@
-name: CI
+name: Build release binaries
 
 on:
   workflow_dispatch:
-    inputs:
-      reason:
-        description: "Reason for running the workflow"
-        required: false
-        default: "Manual execution"
+  inputs:
+  reason:
+  description: "Reason for running the workflow"
+  required: false
+  default: "Manual execution"
 
 env:
-  CARGO_TERM_COLOR: always
+  CRATE_NAME: suiup
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  RUST_BACKTRACE: 1
 
 jobs:
-  test:
-    name: Test on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  test-matrix:
+    name: ${{ matrix.platform.os-name }} with rust ${{ matrix.toolchain }}
+    runs-on: ${{ matrix.platform.runs-on }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable]
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
-          override: true
-          components: rustfmt, clippy
-
-      - name: Cargo cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
-
-      - name: Run tests with nextest
-        run: cargo nextest run --verbose
-
-      - name: Check formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
-  build-release:
-    name: Build Release Binaries
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            bin: suiup
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            bin: suiup
-          - os: windows-latest
+        platform:
+          - os-name: Linux-x86_64
+            runs-on: ubuntu-ghcloud
+            target: x86_64-unknown-linux-musl
+          - os-name: Linux-aarch64
+            runs-on: ubuntu-arm64
+            target: aarch64-unknown-linux-musl
+          - os-name: Windows-aarch64
+            runs-on: windows-latest
+            target: aarch64-pc-windows-msvc
+          - os-name: Windows-x86_64
+            runs-on: windows-latest
             target: x86_64-pc-windows-msvc
-            bin: suiup.exe
-          - os: macos-latest
+          - os-name: macOS-x86_64
+            runs-on: macos-latest
             target: x86_64-apple-darwin
-            bin: suiup
-          - os: macos-latest
+          - os-name: macOS-aarch64
+            runs-on: macos-latest
             target: aarch64-apple-darwin
-            bin: suiup
+        toolchain:
+          - stable
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          target: ${{ matrix.target }}
-
-      - name: Install cross-compilation tools (Linux ARM64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-
-      - name: Build release binary
-        uses: actions-rs/cargo@v1
+          command: "build"
+          target: ${{ matrix.platform.target }}
+          toolchain: ${{ matrix.toolchain }}
+          args: "--locked --release"
+          strip: true
+      - name: Publish artifacts and release
+        uses: houseabsolute/actions-rust-release@v0
         with:
-          command: build
-          args: --release --target ${{ matrix.target }}
-          use-cross: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: suiup-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/${{ matrix.bin }}
+          executable-name: suiup
+          target: ${{ matrix.platform.target }}
+          action-gh-release-parameters: '{ "make_latest": false }'
