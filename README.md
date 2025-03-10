@@ -1,5 +1,5 @@
-> [!WARNING] 
-> Highly experimental, use at your own risk. Not recommended for production use. No warranty is provided.
+> [!CAUTION] 
+> Highly experimental, use at your own risk. Not recommended for production use. No warranty is provided. Might scrap it and rewrite it later!!!
 
 # Overview
 `suiup` is a tool to install and manage different versions of CLI tools for working in the Sui ecosystem. It allows you to easily install and switch between different versions of `sui`, `mvr`, and limited support for `walrus`.
@@ -41,8 +41,8 @@ cargo install https://github.com/Mystenlabs/suiup.git --locked
 
 # Quick Start
 
-> [!NOTE]
-> Pass the `--yes` flag to skip confirmation prompts and select yes to updating the default binary to the one you are installing.
+> [!TIP]
+> Pass the `--yes` flag to skip confirmation prompts, thus accepting to updating the default binary to the one you are installing.
 
 **Install `sui` -- this will install the latest available testnet release**
 ```bash
@@ -65,6 +65,7 @@ suiup update sui
 **Install `mvr` -- this will install the latest available release of Move Registry CLI**
 ```bash
 suiup install mvr
+suiup install mvr v0.0.8 # this will install the MVR CLI v0.0.8 release
 ```
 
 **List available binaries to install**
@@ -99,7 +100,7 @@ suiup which
 
 Installing a nightly version is highly experimental and might not work as expected. Avoid using it unless you really need to.
 
-> [!NOTE]
+> [!IMPORTANT]
 > `--nightly` will replace the current nightly binary, if any. Currently, there's no support for multiple nightly versions. Hope to add it in the future!
 
 **Install from branch (requires cargo + rust installed!)**
@@ -141,6 +142,11 @@ The tool uses these environment variables to store data.
 - `LOCALAPPDATA` or `USERPROFILE\AppData\Local` for storing data
 - `TEMP` or `USERPROFILE\AppData\Local\Temp` for caching
 - `LOCALAPPDATA\bin` for storing default binaries to be used
+
+## Known issues
+- building mvr --nightly might fail on Windows because of issues with compiling the `mvr-cli` crate from the repository. Just install the latest release instead.
+- `suiup remove` does not work well. Do not use it.
+- `suiup install walrus` will always install the latest binary. Need some work to properly support it!
 
 ## Troubleshooting
 
