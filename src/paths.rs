@@ -98,18 +98,18 @@ pub fn get_cache_home() -> PathBuf {
 }
 
 pub fn get_suiup_data_dir() -> PathBuf {
-    let path = get_data_home().join("suiup");
-    path
+    
+    get_data_home().join("suiup")
 }
 
 pub fn get_suiup_config_dir() -> PathBuf {
-    let path = get_config_home().join("suiup");
-    path
+    
+    get_config_home().join("suiup")
 }
 
 pub fn get_suiup_cache_dir() -> PathBuf {
-    let path = get_cache_home().join("suiup");
-    path
+    
+    get_cache_home().join("suiup")
 }
 
 pub fn get_default_bin_dir() -> PathBuf {
@@ -125,21 +125,21 @@ pub fn get_default_bin_dir() -> PathBuf {
 
     #[cfg(not(windows))]
     {
-        let path = env::var_os("SUIUP_DEFAULT_BIN_DIR")
+        
+        env::var_os("SUIUP_DEFAULT_BIN_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 let mut path = PathBuf::from(env::var_os(HOME).expect("HOME not set"));
                 path.push(".local");
                 path.push("bin");
                 path
-            });
-        path
+            })
     }
 }
 
 pub fn get_config_file(name: &str) -> PathBuf {
-    let path = get_suiup_config_dir().join(name);
-    path
+    
+    get_suiup_config_dir().join(name)
 }
 
 /// Returns the path to the default version file

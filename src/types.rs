@@ -106,7 +106,7 @@ impl InstalledBinaries {
 
     /// Add a binary to the installed binaries JSON file
     pub fn add_binary(&mut self, binary: BinaryVersion) {
-        if self.binaries.iter().find(|b| b == &&binary).is_none() {
+        if !self.binaries.iter().any(|b| b == &binary) {
             self.binaries.push(binary);
         }
     }

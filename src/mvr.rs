@@ -28,6 +28,12 @@ pub struct MvrInstaller {
     releases: Vec<MvrRelease>,
 }
 
+impl Default for MvrInstaller {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MvrInstaller {
     pub fn new() -> Self {
         Self {
@@ -39,7 +45,7 @@ impl MvrInstaller {
         let client = Client::new();
         let url = format!("https://api.github.com/repos/{}/releases", MVR_REPO);
 
-        if self.releases.len() > 0 {
+        if !self.releases.is_empty() {
             return Ok(());
         }
 

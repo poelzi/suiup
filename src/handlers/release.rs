@@ -62,9 +62,9 @@ pub async fn release_list(
 fn read_etag_file() -> Result<String, anyhow::Error> {
     let etag_file = get_suiup_cache_dir().join("etag.txt");
     if etag_file.exists() {
-        let etag = std::fs::read_to_string(&etag_file)
-            .map_err(|_| anyhow!("Cannot read from file {}", etag_file.display()));
-        etag
+        
+        std::fs::read_to_string(&etag_file)
+            .map_err(|_| anyhow!("Cannot read from file {}", etag_file.display()))
     } else {
         Ok("".to_string())
     }

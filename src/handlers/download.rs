@@ -135,7 +135,7 @@ pub async fn download_file(
         return Err(anyhow!("Failed to download: {}", response.status()));
     }
 
-    let mut total_size = response.content_length().unwrap_or_else(|| 0);
+    let mut total_size = response.content_length().unwrap_or(0);
     //walrus is on google storage, so different content length header
     if total_size == 0 {
         total_size = response
@@ -151,7 +151,7 @@ pub async fn download_file(
             println!("Found {name} in cache");
             return Ok(name.to_string());
         } else {
-            std::fs::remove_file(&download_to)?;
+            std::fs::remove_file(download_to)?;
         }
     }
 
@@ -161,7 +161,7 @@ pub async fn download_file(
             .unwrap()
             .progress_chars("=>-"));
 
-    let mut file = std::fs::File::create(&download_to)?;
+    let mut file = std::fs::File::create(download_to)?;
     let mut downloaded: u64 = 0;
     let mut stream = response.bytes_stream();
     let start = Instant::now();

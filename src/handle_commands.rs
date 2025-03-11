@@ -72,11 +72,11 @@ pub async fn handle_cmd(cmd: ComponentCommands, github_token: Option<String>) ->
 
             match (&name, &nightly) {
                 (BinaryName::Walrus, _) => {
-                    create_dir_all(&installed_bins_dir.join(network.clone()))?;
+                    create_dir_all(installed_bins_dir.join(network.clone()))?;
                     install_walrus(network, yes).await?;
                 }
                 (BinaryName::Mvr, nightly) => {
-                    create_dir_all(&installed_bins_dir.join("standalone"))?;
+                    create_dir_all(installed_bins_dir.join("standalone"))?;
                     if let Some(branch) = nightly {
                         install_from_nightly(&name, branch, debug, yes).await?;
                     } else {
@@ -88,7 +88,7 @@ pub async fn handle_cmd(cmd: ComponentCommands, github_token: Option<String>) ->
                 }
                 _ => {
                     install_from_release(
-                        &name.to_string().as_str(),
+                        name.to_string().as_str(),
                         &network,
                         version,
                         debug,
@@ -150,7 +150,7 @@ pub async fn handle_cmd(cmd: ComponentCommands, github_token: Option<String>) ->
                 .map(|x| &x.binary_name)
                 .collect::<HashSet<_>>();
             for binary in default_binaries_to_remove {
-                let default_bin_path = get_default_bin_dir().join(&binary);
+                let default_bin_path = get_default_bin_dir().join(binary);
                 if default_bin_path.exists() {
                     std::fs::remove_file(default_bin_path)
                         .map_err(|e| anyhow!("Cannot remove file: {e}"))?;

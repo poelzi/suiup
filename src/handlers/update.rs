@@ -96,7 +96,7 @@ pub async fn handle_update(
     let releases = release_list(github_token.clone()).await?.0;
     let mut to_update = vec![];
     for (n, v) in &network_local_last_version {
-        let last_release = last_release_for_network(&releases, &n).await?;
+        let last_release = last_release_for_network(&releases, n).await?;
         let last_version = last_release.1;
         if v == &last_version {
             println!("[{n} release] {name} is up to date");

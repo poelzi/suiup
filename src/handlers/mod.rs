@@ -114,9 +114,9 @@ pub fn update_after_install(
                 }
 
                 let binary_folder = if version == "nightly" {
-                    binaries_dir().join(network.to_string()).join("bin")
+                    binaries_dir().join(&network).join("bin")
                 } else {
-                    binaries_dir().join(network.to_string())
+                    binaries_dir().join(&network)
                 };
 
                 if !binary_folder.exists() {
@@ -241,7 +241,7 @@ fn extract_component(orig_binary: &str, network: String, filename: &str) -> Resu
     let mut archive = Archive::new(tar);
 
     #[cfg(not(windows))]
-    let binary = format!("{orig_binary}");
+    let binary = orig_binary.to_string();
     #[cfg(windows)]
     let binary = format!("{}.exe", orig_binary);
 
@@ -251,11 +251,11 @@ fn extract_component(orig_binary: &str, network: String, filename: &str) -> Resu
         .map_err(|e| anyhow!("Cannot iterate through archive entries: {e}"))?
     {
         let mut f = file.unwrap();
-        if f.path()?.file_name().map(|x| x.to_str()).flatten() == Some(&binary) {
+        if f.path()?.file_name().and_then(|x| x.to_str()) == Some(&binary) {
             println!("Extracting file: {}", &binary);
 
             let mut output_path = binaries_dir();
-            output_path.push(network.to_string());
+            output_path.push(&network);
             if !output_path.is_dir() {
                 std::fs::create_dir_all(output_path.as_path())?;
             }
@@ -304,10 +304,10 @@ pub fn check_if_binaries_exist(
     version: &str,
 ) -> Result<bool, Error> {
     let mut path = binaries_dir();
-    path.push(network.to_string());
+    path.push(&network);
 
     let binary_version = if version.is_empty() {
-        format!("{}", binary)
+        binary.to_string()
     } else {
         format!("{}-{}", binary, version)
     };

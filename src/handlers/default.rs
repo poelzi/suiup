@@ -98,13 +98,13 @@ pub fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
                 format!("{}", name)
             };
 
-            dst.push(&name.to_string());
+            dst.push(&name);
 
             #[cfg(target_os = "windows")]
             dst.set_extension("exe");
 
             let mut src = binaries_dir();
-            src.push(network.to_string());
+            src.push(network);
 
             if nightly.is_some() {
                 // cargo install adds a bin folder to the specified path :-)

@@ -186,7 +186,7 @@ pub async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
         #[cfg(target_os = "windows")]
         let filename = format!("walrus.exe");
 
-        install_binary(&filename, network, "latest", false, binaries_dir(), yes)?;
+        install_binary(filename, network, "latest", false, binaries_dir(), yes)?;
     } else {
         println!("Binary walrus-latest already installed");
     }
