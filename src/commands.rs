@@ -248,6 +248,7 @@ pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::
 pub fn parse_version_spec(spec: Option<String>) -> Result<(String, Option<String>), Error> {
     match spec {
         None => Ok(("testnet".to_string(), None)),
+        Some(spec) if spec.starts_with("v") => Ok(("testnet".to_string(), Some(spec))),
         Some(spec) => {
             if spec.starts_with("testnet-")
                 || spec.starts_with("devnet-")

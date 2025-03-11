@@ -109,7 +109,6 @@ fn load_cached_release_list() -> Result<Option<(Vec<Release>, String)>, anyhow::
     let etag_file = get_suiup_cache_dir().join("etag.txt");
 
     if cache_file.exists() && etag_file.exists() {
-        println!("Loading releases list from cache");
         let cache_content: Vec<Release> = serde_json::from_str(
             &std::fs::read_to_string(&cache_file)
                 .map_err(|_| anyhow!("Cannot read from file {}", cache_file.display()))?,
