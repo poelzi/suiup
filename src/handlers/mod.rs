@@ -48,7 +48,6 @@ pub fn update_default_version_file(
     let path = default_file_path()?;
     let file = File::open(&path)?;
     let reader = BufReader::new(file);
-    println!("Updating default version file...");
     let mut map: HashMap<String, (String, Version, bool)> = serde_json::from_reader(reader)?;
 
     for binary in binaries {
@@ -214,9 +213,9 @@ fn check_path_and_warn() -> Result<(), Error> {
             {
                 println!("Add one of the following lines depending on your shell:");
                 println!("\nFor bash/zsh (~/.bashrc or ~/.zshrc):");
-                println!("    export PATH=\"$HOME/.local/bin:$PATH\"");
+                println!("    export PATH=\"{}:$PATH\"", local_bin.display());
                 println!("\nFor fish (~/.config/fish/config.fish):");
-                println!("    fish_add_path $HOME/.local/bin");
+                println!("    fish_add_path {}", local_bin.display());
                 println!("\nThen restart your shell or run one of:");
                 println!("    source ~/.bashrc        # for bash");
                 println!("    source ~/.zshrc         # for zsh");

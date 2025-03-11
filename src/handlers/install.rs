@@ -164,7 +164,7 @@ pub async fn install_from_nightly(
 
 pub async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
     if !check_if_binaries_exist("walrus", network.clone(), "latest")? {
-        println!("Adding component: walrus-latest");
+        println!("Adding binary: walrus-latest");
         let (os, arch) = detect_os_arch()?;
         let download_dir = binaries_dir().join(network.clone());
         let download_to = download_dir.join("walrus-latest");
@@ -205,7 +205,7 @@ pub async fn install_mvr(version: Option<String>, yes: bool) -> Result<(), Error
         let mut installer = mvr::MvrInstaller::new();
         let installed_version = installer.download_version(version).await?;
 
-        println!("Adding component: mvr-{installed_version}");
+        println!("Adding binary: mvr-{installed_version}");
 
         let binary_path = binaries_dir()
             .join(&network)
