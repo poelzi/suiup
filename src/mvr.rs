@@ -77,7 +77,11 @@ impl MvrInstaller {
         if !cache_folder.exists() {
             std::fs::create_dir_all(&cache_folder)?;
         }
+        #[cfg(not(windows))]
         let mvr_binary_path = cache_folder.join(format!("mvr-{}", version));
+        #[cfg(target_os = "windows")]
+        let mvr_binary_path = cache_folder.join(format!("mvr-{}.exe", version));
+
         if mvr_binary_path.exists() {
             println!("Binary mvr-{version} already installed. Use `suiup default set mvr {version}` to set the default version to the desired one");
             return Ok(version);

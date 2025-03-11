@@ -180,6 +180,7 @@ pub async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
         )
         .await?;
 
+        #[cfg(not(windows))]
         let filename = "walrus";
 
         #[cfg(target_os = "windows")]

@@ -197,13 +197,15 @@ fn check_path_and_warn() -> Result<(), Error> {
             {
                 println!("\nTo add it to your PATH:");
                 println!("1. Press Win + X and select 'System'");
-                println!("2. Click on 'Advanced system settings'");
+                println!(
+                    "2. Click on 'Advanced system settings (might find it on the right side)'"
+                );
                 println!("3. Click on 'Environment Variables'");
                 println!("4. Under 'User variables', find and select 'Path'");
                 println!("5. Click 'Edit'");
                 println!("6. Click 'New'");
                 println!("7. Add the following path:");
-                println!("    %USERPROFILE%\\.local\\bin");
+                println!("    %USERPROFILE%\\Local\\bin");
                 println!("8. Click 'OK' on all windows");
                 println!("9. Restart your terminal\n");
             }
@@ -239,6 +241,7 @@ fn extract_component(orig_binary: &str, network: String, filename: &str) -> Resu
     let tar = GzDecoder::new(file);
     let mut archive = Archive::new(tar);
 
+    #[cfg(not(windows))]
     let binary = format!("{orig_binary}");
     #[cfg(windows)]
     let binary = format!("{}.exe", orig_binary);
