@@ -4,12 +4,9 @@
 # Overview
 `suiup` is a tool to install and manage different versions of CLI tools for working in the Sui ecosystem. It allows you to easily install and switch between different versions of `sui`, `mvr`, and limited support for `walrus`.
 
-Versions are specified in the format `network` and optionally a version (`-vX.Y.Z`) for `sui` (e.g., `testnet-v1.40.0`, `devnet`, `mainnet`) and `vX.Y.Z` for `mvr` (e.g., `v0.0.7`).
-`walrus` CLI is poorly supported at the time of writing.
+Check out the [Quick Start](#quick-start) guide for how-to-use examples.
 
-Please note that due to the different release mechanisms between these different tools, `suiup` does its best to make it simple to install them, but please read the examples below to understand how it works.
-
-# Supported OS
+# Supported OS (for suiup tool, but not necessarily for the binaries it installs)
 
 | OS       | Architecture      | Status         |
 |----------|-------------------|----------------|
@@ -42,11 +39,16 @@ cargo install --git https://github.com/Mystenlabs/suiup.git --locked
 # Quick Start
 
 > [!TIP]
-> Pass the `--yes` flag to skip confirmation prompts, thus accepting to updating the default binary to the one you are installing.
+> Pass the `--yes (-y)` flag to skip confirmation prompts, thus accepting to updating the default binary to the one you are installing.
 
 ### Install `sui` -- this will install the latest available testnet release
 ```bash
 suiup install sui
+```
+
+### Install `sui` with specific version
+```bash
+suiup install sui v1.44.2 # this will install the testnet-v1.44.2 release
 ```
 
 ### Install `sui` with specific network (and version)
@@ -56,10 +58,15 @@ suiup install sui testnet-v1.40.1 # this will install the testnet v1.40.1 releas
 ```
 
 ### Update `sui` to latest version
-This will check for newer releases of those that are already installed, and tries to download the new ones. Recommended to specify which release to update.
+This will check for newer releases of those that are already installed, and then download the new ones. Recommended to specify which release to update.
 ```bash
 suiup update sui devnet # recommended
 suiup update sui
+```
+
+### Install `sui` binary to specific default directory
+```bash
+SUIUP_DEFAULT_BIN_DIR=/path/to/default_dir suiup install sui -y
 ```
 
 ### Install `mvr` (Move Registry CLI)
@@ -144,6 +151,9 @@ GITHUB_TOKEN=your_github_token suiup install sui
 
 ## Paths used by the `suiup` tool
 
+> [!TIP]
+> Set `SUIUP_DEFAULT_BIN_DIR` environment variable to specify a different directory for storing the default binaries. The tool will warn if this folder is not on the path and suggest how to add it.
+
 **[Unix/MacOS]**
 The tool uses these environment variables to store data.
 - `XDG_DATA_HOME`
@@ -156,12 +166,35 @@ The tool uses these environment variables to store data.
 - `TEMP` or `USERPROFILE\AppData\Local\Temp` for caching
 - `LOCALAPPDATA\bin` for storing default binaries to be used
 
+
 ## Known issues
 - `suiup install mvr --nightly` might fail on **Windows** because of issues with compiling the `mvr-cli` crate from the repository. Just install the latest release instead.
 - `suiup remove` does not work well. Do not use it.
 - `suiup install walrus` will always install the latest binary. Need some work to properly support Walrus CLI!
 
 ## Troubleshooting
+
+### `suiup` is not recognized as a command
+
+Make sure the folder where the `suiup` binary is located is on the `PATH` environment variable. You can also add the folder where the `suiup` binary is located to the `PATH` environment variable.
+
+### `suiup` is not working as expected
+
+Please open an issue on the GitHub repository with the details of the problem you are facing.
+
+### `suiup` is not downloading the binaries
+
+Make sure you have an active internet connection. If you are behind a proxy, you might need to figure it out yourself. The tool does not support proxy settings yet.
+
+### Cannot run the binaries, even though they are installed and set as default
+
+Make sure the folder where the default binaries are stored is on the `PATH` environment variable. You can use `suiup which` to see where the default binaries are stored.
+
+### It looks like it's not calling the right binaries, the binary version does not change
+
+The order of the folders in the `PATH` environment variable matters. Make sure the folder where the default binaries are stored (see above) is before the folder where you might already have 
+some other versions of these binaries copied to. In Unix/MacOS use `which sui/mvr/walrus` to see the path of the binary that is being called.
+Use `suiup which` to see where the default binaries are stored.
 
 ### Where are the default binaries copied to?
 
