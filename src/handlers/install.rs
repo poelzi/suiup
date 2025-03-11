@@ -184,7 +184,7 @@ pub async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
         let filename = "walrus";
 
         #[cfg(target_os = "windows")]
-        let filename = format!("walrus.exe");
+        let filename = &format!("walrus.exe");
 
         install_binary(filename, network, "latest", false, binaries_dir(), yes)?;
     } else {
