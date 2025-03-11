@@ -29,7 +29,7 @@ curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | 
 
 ### From Cargo
 ```bash
-cargo install https://github.com/Mystenlabs/suiup.git --locked
+cargo install --git https://github.com/Mystenlabs/suiup.git --locked
 ```
 
 ### From Release
