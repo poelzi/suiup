@@ -23,8 +23,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        # os: [windows-latest]
+        # os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest]
         rust: [stable]
 
     steps:
@@ -42,6 +42,13 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: nextest
+
+      - name: Add default bin directory to PATH (Windows only)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            echo "$USERPROFILE/AppData/Local/bin" >> $GITHUB_PATH
+          fi
 
       - name: Run tests with test
         # run: cargo test -- --nocapturexd
