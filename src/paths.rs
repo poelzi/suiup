@@ -98,17 +98,14 @@ pub fn get_cache_home() -> PathBuf {
 }
 
 pub fn get_suiup_data_dir() -> PathBuf {
-    
     get_data_home().join("suiup")
 }
 
 pub fn get_suiup_config_dir() -> PathBuf {
-    
     get_config_home().join("suiup")
 }
 
 pub fn get_suiup_cache_dir() -> PathBuf {
-    
     get_cache_home().join("suiup")
 }
 
@@ -125,7 +122,6 @@ pub fn get_default_bin_dir() -> PathBuf {
 
     #[cfg(not(windows))]
     {
-        
         env::var_os("SUIUP_DEFAULT_BIN_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
@@ -138,7 +134,6 @@ pub fn get_default_bin_dir() -> PathBuf {
 }
 
 pub fn get_config_file(name: &str) -> PathBuf {
-    
     get_suiup_config_dir().join(name)
 }
 
