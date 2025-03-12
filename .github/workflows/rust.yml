@@ -15,6 +15,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  ACTIONS_STEP_DEBUG: true
 
 jobs:
   test:
@@ -51,7 +52,7 @@ jobs:
           fi
 
       - name: Run tests with test
-        run: cargo nextest run --no-fail-fast --retries 4
+        run: RUST_LOG=debug cargo nextest run --no-fail-fast --retries 4
 
       - name: Check formatting
         uses: actions-rs/cargo@v1
