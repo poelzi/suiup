@@ -69,7 +69,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_install_and_use_binary() -> Result<()> {
+    async fn test_sui_install_and_use_binary() -> Result<()> {
         let test_env = TestEnv::new()?;
         test_env.initialize_paths()?;
         test_env.copy_testnet_releases_to_cache()?;
@@ -321,6 +321,55 @@ mod tests {
         // Now switch from a release version to nightly
         let mut cmd = suiup_command(vec!["default", "set", "mvr", "--nightly"], &test_env);
         cmd.assert().success();
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_walrus_install_and_use_binary() -> Result<()> {
+        let test_env = TestEnv::new()?;
+        test_env.initialize_paths()?;
+        test_env.copy_testnet_releases_to_cache()?;
+
+        // Run install command
+        let mut cmd = suiup_command(
+            vec!["install", "walrus", "testnet-v1.18.2", "-y"],
+            &test_env,
+        );
+
+        #[cfg(windows)]
+        let assert_string = "'walrus.exe' extracted successfully!";
+        #[cfg(not(windows))]
+        let assert_string = "'walrus' extracted successfully!";
+
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains(assert_string));
+
+        // Verify binary exists in correct location
+        #[cfg(windows)]
+        let binary_path = test_env
+            .data_dir
+            .join("suiup/binaries/testnet/walrus-v1.18.2.exe");
+        #[cfg(not(windows))]
+        let binary_path = test_env
+            .data_dir
+            .join("suiup/binaries/testnet/walrus-v1.18.2");
+        assert!(binary_path.exists());
+
+        // Verify default binary exists
+        #[cfg(windows)]
+        let default_sui_binary = test_env.bin_dir.join("walrus.exe");
+        #[cfg(not(windows))]
+        let default_sui_binary = test_env.bin_dir.join("walrus");
+        assert!(default_sui_binary.exists());
+
+        // Test binary execution
+        let mut cmd = Command::new(default_sui_binary);
+        cmd.arg("--version");
+        cmd.assert()
+            .success()
+            .stdout(predicate::str::contains("1.18.2"));
 
         Ok(())
     }
