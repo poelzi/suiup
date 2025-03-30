@@ -54,7 +54,7 @@ suiup install sui
 suiup install sui v1.44.2 # this will install the testnet-v1.44.2 release
 ```
 
-### Install `sui` with specific network (and version)
+### Install `sui` with specific release (and version)
 ```bash
 suiup install sui devnet # this will install the latest available devnet release
 suiup install sui testnet-v1.40.1 # this will install the testnet v1.40.1 release

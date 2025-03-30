@@ -8,9 +8,9 @@ use super::check_if_binaries_exist;
 use super::version::extract_version_from_release;
 use crate::commands::BinaryName;
 use crate::handlers::download::{
-    detect_os_arch, download_file, download_latest_release, download_release_at_version,
+    download_latest_release, download_release_at_version,
 };
-use crate::handlers::{extract_component, update_after_install, WALRUS_BASE_URL};
+use crate::handlers::{extract_component, update_after_install};
 use crate::mvr;
 use crate::paths::binaries_dir;
 use crate::types::{BinaryVersion, InstalledBinaries, Repo};
@@ -160,37 +160,6 @@ pub async fn install_from_nightly(
         yes,
     )?;
 
-    Ok(())
-}
-
-pub async fn install_walrus(network: String, yes: bool) -> Result<(), Error> {
-    if !check_if_binaries_exist("walrus", network.clone(), "latest")? {
-        println!("Adding binary: walrus-latest");
-        let (os, arch) = detect_os_arch()?;
-        let download_dir = binaries_dir().join(network.clone());
-        let download_to = download_dir.join("walrus-latest");
-        download_file(
-            &format!(
-                "{}/walrus-{network}-latest-{os}-{arch}",
-                WALRUS_BASE_URL,
-                network = network
-            ),
-            &download_to,
-            "walrus-latest",
-            None,
-        )
-        .await?;
-
-        #[cfg(not(windows))]
-        let filename = "walrus";
-
-        #[cfg(target_os = "windows")]
-        let filename = &format!("walrus.exe");
-
-        install_binary(filename, network, "latest", false, binaries_dir(), yes)?;
-    } else {
-        println!("Binary walrus-latest already installed");
-    }
     Ok(())
 }
 

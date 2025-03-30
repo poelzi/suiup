@@ -70,19 +70,22 @@ pub async fn handle_cmd(cmd: ComponentCommands, github_token: Option<String>) ->
             }
 
             match (&name, &nightly) {
-                (BinaryName::Walrus, _) => {
+                (BinaryName::Walrus, nightly) => {
                     create_dir_all(installed_bins_dir.join(network.clone()))?;
-                    install_from_release(
-                        name.to_string().as_str(),
-                        &network,
-                        version,
-                        debug,
-                        yes,
-                        Repo::Walrus,
-                        github_token.clone(),
-                    )
-                    .await?;
-                    // install_walrus(network, yes).await?;
+                    if let Some(branch) = nightly {
+                        install_from_nightly(&name, branch, debug, yes).await?;
+                    } else {
+                        install_from_release(
+                            name.to_string().as_str(),
+                            &network,
+                            version,
+                            debug,
+                            yes,
+                            Repo::Walrus,
+                            github_token.clone(),
+                        )
+                        .await?;
+                    }
                 }
                 (BinaryName::Mvr, nightly) => {
                     create_dir_all(installed_bins_dir.join("standalone"))?;

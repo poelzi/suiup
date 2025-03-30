@@ -36,7 +36,7 @@ mod tests {
         cmd.env(DATA_HOME, &test_env.data_dir)
             .env(CONFIG_HOME, &test_env.config_dir)
             .env(CACHE_HOME, &test_env.cache_dir)
-            .env(HOME, &test_env.temp_dir.path());
+            .env(HOME, test_env.temp_dir.path());
         cmd
     }
 
@@ -203,7 +203,7 @@ mod tests {
         let folders = std::fs::read_dir(&binary_path)?;
         let num_files: Vec<_> = folders.into_iter().collect();
         // should have at least 2 versions, 1.39.0 and whatever latest is
-        assert!(num_files.len() >= 1);
+        assert!(!num_files.is_empty());
 
         // Verify default binary exists
         #[cfg(windows)]

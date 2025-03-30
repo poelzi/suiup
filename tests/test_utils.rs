@@ -36,25 +36,25 @@ impl TestEnv {
         let cache_home = get_cache_home();
         let bin_home = get_default_bin_dir();
 
-        let data_dir = if let Some(path) = data_home.strip_prefix(&home_dir).ok() {
+        let data_dir = if let Ok(path) = data_home.strip_prefix(&home_dir) {
             base.join(path)
         } else {
             base.join(data_home)
         };
 
-        let config_dir = if let Some(path) = config_home.strip_prefix(&home_dir).ok() {
+        let config_dir = if let Ok(path) = config_home.strip_prefix(&home_dir) {
             base.join(path)
         } else {
             base.join(config_home)
         };
 
-        let cache_dir = if let Some(path) = cache_home.strip_prefix(&home_dir).ok() {
+        let cache_dir = if let Ok(path) = cache_home.strip_prefix(&home_dir) {
             base.join(path)
         } else {
             base.join(cache_home)
         };
 
-        let bin_dir = if let Some(path) = bin_home.strip_prefix(&home_dir).ok() {
+        let bin_dir = if let Ok(path) = bin_home.strip_prefix(&home_dir) {
             base.join(path)
         } else {
             base.join(bin_home)
