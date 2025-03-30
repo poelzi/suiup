@@ -10,7 +10,6 @@ mod handlers;
 mod mvr;
 mod paths;
 mod types;
-mod walrus;
 use commands::{Commands, ComponentCommands, Suiup};
 use handle_commands::handle_cmd;
 use handlers::default::handle_default;

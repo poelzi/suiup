@@ -8,15 +8,16 @@ use reqwest::header::ETAG;
 use reqwest::header::IF_NONE_MATCH;
 
 use crate::handlers::version::extract_version_from_release;
-use crate::handlers::GITHUB_REPO;
 use crate::paths::get_suiup_cache_dir;
 use crate::types::Release;
+use crate::types::Repo;
 
 /// Fetches the list of releases from the GitHub repository
 pub async fn release_list(
+    repo: Repo,
     github_token: Option<String>,
 ) -> Result<(Vec<Release>, Option<String>), anyhow::Error> {
-    let release_url = format!("https://api.github.com/repos/{}/releases", GITHUB_REPO);
+    let release_url = format!("https://api.github.com/repos/{}/releases", repo);
     let client = reqwest::blocking::Client::new();
     let mut request = client.get(&release_url).header("User-Agent", "suiup");
 

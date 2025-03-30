@@ -13,7 +13,7 @@ use crate::handlers::download::{
 use crate::handlers::{extract_component, update_after_install, WALRUS_BASE_URL};
 use crate::mvr;
 use crate::paths::binaries_dir;
-use crate::types::{BinaryVersion, InstalledBinaries};
+use crate::types::{BinaryVersion, InstalledBinaries, Repo};
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
@@ -48,13 +48,14 @@ pub async fn install_from_release(
     version_spec: Option<String>,
     debug: bool,
     yes: bool,
+    repo: Repo,
     github_token: Option<String>,
 ) -> Result<(), Error> {
     let filename = match version_spec {
         Some(version) => {
-            download_release_at_version(network, &version, github_token.clone()).await?
+            download_release_at_version(repo, network, &version, github_token.clone()).await?
         }
-        None => download_latest_release(network, github_token.clone()).await?,
+        None => download_latest_release(repo, network, github_token.clone()).await?,
     };
 
     let version = extract_version_from_release(&filename)?;

@@ -15,11 +15,10 @@ use crate::commands::parse_component_with_version;
 use crate::commands::BinaryName;
 use crate::commands::ComponentCommands;
 use crate::handlers::available_components;
-use crate::handlers::install::{
-    install_from_nightly, install_from_release, install_mvr, install_walrus,
-};
+use crate::handlers::install::{install_from_nightly, install_from_release, install_mvr};
 use crate::paths::*;
 use crate::types::InstalledBinaries;
+use crate::types::Repo;
 use crate::types::Version;
 use std::fs::create_dir_all;
 
@@ -73,7 +72,17 @@ pub async fn handle_cmd(cmd: ComponentCommands, github_token: Option<String>) ->
             match (&name, &nightly) {
                 (BinaryName::Walrus, _) => {
                     create_dir_all(installed_bins_dir.join(network.clone()))?;
-                    install_walrus(network, yes).await?;
+                    install_from_release(
+                        name.to_string().as_str(),
+                        &network,
+                        version,
+                        debug,
+                        yes,
+                        Repo::Walrus,
+                        github_token.clone(),
+                    )
+                    .await?;
+                    // install_walrus(network, yes).await?;
                 }
                 (BinaryName::Mvr, nightly) => {
                     create_dir_all(installed_bins_dir.join("standalone"))?;
@@ -93,6 +102,7 @@ pub async fn handle_cmd(cmd: ComponentCommands, github_token: Option<String>) ->
                         version,
                         debug,
                         yes,
+                        Repo::Sui,
                         github_token.clone(),
                     )
                     .await?;

@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::handlers::{
-    available_components, installed_binaries_grouped_by_network,
-    release::{last_release_for_network, release_list},
-};
 use crate::{
     commands::{parse_component_with_version, BinaryName, CommandMetadata, ComponentCommands},
     handle_commands::handle_cmd,
     types::InstalledBinaries,
+};
+use crate::{
+    handlers::{
+        available_components, installed_binaries_grouped_by_network,
+        release::{last_release_for_network, release_list},
+    },
+    types::Repo,
 };
 use anyhow::{bail, Error};
 
@@ -93,7 +96,7 @@ pub async fn handle_update(
         return Ok(());
     }
 
-    let releases = release_list(github_token.clone()).await?.0;
+    let releases = release_list(Repo::Sui, github_token.clone()).await?.0;
     let mut to_update = vec![];
     for (n, v) in &network_local_last_version {
         let last_release = last_release_for_network(&releases, n).await?;

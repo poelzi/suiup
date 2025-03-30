@@ -5,12 +5,11 @@
 use crate::{
     handlers::download::{detect_os_arch, download_file},
     paths::binaries_dir,
+    types::Repo,
 };
 use anyhow::{anyhow, Error};
 use reqwest::blocking::Client;
 use serde::Deserialize;
-
-const MVR_REPO: &str = "MystenLabs/mvr";
 
 #[derive(Deserialize, Debug)]
 pub struct MvrRelease {
@@ -43,7 +42,7 @@ impl MvrInstaller {
 
     pub fn get_releases(&mut self) -> Result<(), Error> {
         let client = Client::new();
-        let url = format!("https://api.github.com/repos/{}/releases", MVR_REPO);
+        let url = format!("https://api.github.com/repos/{}/releases", Repo::Mvr);
 
         if !self.releases.is_empty() {
             return Ok(());

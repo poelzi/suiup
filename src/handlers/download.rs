@@ -4,6 +4,7 @@
 use crate::handlers::release::find_last_release_by_network;
 use crate::handlers::version::extract_version_from_release;
 use crate::handlers::GITHUB_REPO;
+use crate::types::Repo;
 use crate::{handlers::release::release_list, paths::release_archive_dir, types::Release};
 use anyhow::{anyhow, bail, Error};
 use futures_util::StreamExt;
@@ -36,6 +37,7 @@ pub fn detect_os_arch() -> Result<(String, String), Error> {
 /// Downloads a release with a specific version
 /// The network is used to filter the release
 pub async fn download_release_at_version(
+    repo: Repo,
     network: &str,
     version: &str,
     github_token: Option<String>,
@@ -48,7 +50,7 @@ pub async fn download_release_at_version(
     let client = reqwest::blocking::Client::new();
     let mut headers = HeaderMap::new();
 
-    let releases = release_list(github_token.clone()).await?.0;
+    let releases = release_list(repo, github_token.clone()).await?.0;
 
     if let Some(release) = releases
         .iter()
@@ -83,11 +85,12 @@ pub async fn download_release_at_version(
 
 /// Downloads the latest release for a given network
 pub async fn download_latest_release(
+    repo: Repo,
     network: &str,
     github_token: Option<String>,
 ) -> Result<String, anyhow::Error> {
     println!("Downloading release list");
-    let releases = release_list(github_token.clone()).await?;
+    let releases = release_list(repo, github_token.clone()).await?;
 
     let (os, arch) = detect_os_arch()?;
 

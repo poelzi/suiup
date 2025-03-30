@@ -8,4 +8,3 @@ pub mod paths;
 pub mod types;
 
 pub mod mvr;
-pub mod walrus;
