@@ -2,7 +2,8 @@
 > Highly experimental, use at your own risk. Not recommended for production use. No warranty is provided. Might scrap it and rewrite it later!!!
 
 # Overview
-`suiup` is a tool to install and manage different versions of CLI tools for working in the Sui ecosystem. It allows you to easily install and switch between different versions of `sui`, `mvr`, and limited support for `walrus`.
+`suiup` is a tool to install and manage different versions of CLI tools for working in the Sui ecosystem. It allows you to easily install and switch between different versions of `sui`, `mvr`, `walrus`.
+After installation, run `suiup list` to find which binaries you can install.
 
 Check out the [Quick Start](#quick-start) guide for how-to-use examples.
 
@@ -14,7 +15,7 @@ Check out the [Quick Start](#quick-start) guide for how-to-use examples.
 | Linux    | aarch64 (ARM64)   | ✅ Supported   |
 | macOS    | x86_64 (amd64)    | ✅ Supported   |
 | macOS    | aarch64 (ARM64)   | ✅ Supported   |
-| Windows  | x86_64 (amd64)    | Limited support (might or might not work) |
+| Windows  | x86_64 (amd64)    | ✅ Supported   |
 | Windows  | aarch64 (ARM64)   | Limited support (might or might not work) |
 
 # Installation
@@ -37,6 +38,8 @@ cargo install --git https://github.com/Mystenlabs/suiup.git --locked
 4. (Optional) restart your terminal if you made changes to your `PATH`.
 
 # Quick Start
+
+It's recommended to read the whole quick start to familiarize yourself with the commands.
 
 > [!TIP]
 > Pass the `--yes (-y)` flag to skip confirmation prompts, thus accepting to updating the default binary to the one you are installing.
@@ -67,6 +70,11 @@ suiup update sui
 ### Install `sui` binary to specific default directory
 ```bash
 SUIUP_DEFAULT_BIN_DIR=/path/to/default_dir suiup install sui -y
+```
+
+### Install `walrus` (note that walrus release are available starting with v1.17.1 for devnet/testnet and v1.18.2 for mainnet)
+```bash
+suiup install walrus -y
 ```
 
 ### Install `mvr` (Move Registry CLI)
@@ -198,4 +206,5 @@ Use `suiup which` to see where the default binaries are stored.
 
 ### Where are the default binaries copied to?
 
-For Unix/MacOS they are copied to `$HOME/.local/bin` (or where your `SUIUP_DEFAULT_BIN_DIR` env var points to) and for Windows they are copied to `LOCALAPPDATA\bin`. Make sure you have these folders on the `PATH`.
+For Unix/MacOS they are copied to `$HOME/.local/bin` (or where your `SUIUP_DEFAULT_BIN_DIR` env var points to) and for Windows they are copied to `LOCALAPPDATA\bin`.
+Make sure you have these folders on the `PATH`.
