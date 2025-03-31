@@ -24,7 +24,7 @@ pub(crate) struct Suiup {
 pub enum Commands {
     #[command(subcommand, about = "Get or set the default tool version")]
     Default(DefaultCommands),
-    #[command(about = "Install one or more binaries")]
+    #[command(about = "Install a binary")]
     Install {
         #[arg(
             num_args = 1..=2,
@@ -58,13 +58,13 @@ pub enum Commands {
     },
     #[command(about = "List available binaries to install")]
     List,
-    #[command(about = "Show installed and active Sui binaries")]
+    #[command(about = "Show installed and active binaries")]
     Show,
     #[command(about = "Update binary")]
     Update {
         #[arg(
             num_args = 1..=2,
-            help = "Binary to update (e.g. 'sui', 'mvr'). By default, it will update the default \
+            help = "Binary to update (e.g. 'sui', 'mvr', 'walrus'). By default, it will update the default \
             binary version. For updating a specific release or branch, pass in the release name / branch name."
         )]
         name: Vec<String>,
@@ -73,19 +73,13 @@ pub enum Commands {
     },
     #[command(about = "Show the path where default binaries are installed")]
     Which,
-    // #[command(about = "Generate shell completion scripts", skip)]
-    // #[command(skip)]
-    // Completion {
-    //     #[arg(value_enum)]
-    //     shell: clap_complete::Shell,
-    // },
 }
 
 #[derive(Subcommand)]
 pub enum ComponentCommands {
     #[command(about = "List available binaries to install")]
     List,
-    #[command(about = "Add one or more binaries")]
+    #[command(about = "Add a binary")]
     Add {
         #[arg(
             num_args = 1..=2,
