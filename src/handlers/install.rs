@@ -102,18 +102,20 @@ pub async fn install_from_nightly(
     let repo_url = name.repo_url();
     let binaries_folder = binaries_dir();
     let binaries_folder_branch = binaries_folder.join(branch);
+
     let mut args = vec![
         "install", "--locked", "--force", "--git", repo_url, "--branch", branch,
     ];
+
     if name == &BinaryName::Walrus {
         args.push("walrus-service");
         args.push("--bin");
-        args.push("walrus")
+        args.push("walrus");
     } else {
         args.push(name.to_str());
-    }
-    args.extend(vec!["--root", binaries_folder_branch.to_str().unwrap()]);
+    };
 
+    args.extend(vec!["--root", binaries_folder_branch.to_str().unwrap()]);
     let mut cmd = Command::new("cargo");
     cmd.args(&args);
 
@@ -137,9 +139,9 @@ pub async fn install_from_nightly(
     // rename the binary to `binary_name-nightly`, to keep things in sync across the board
 
     let dst_name = if debug {
-        format!("{}-debug-nightly", name.to_str())
+        format!("{}-debug-nightly", name)
     } else {
-        format!("{}-nightly", name.to_str())
+        format!("{}-nightly", name)
     };
     let dst = binaries_folder_branch.join("bin").join(dst_name);
 
