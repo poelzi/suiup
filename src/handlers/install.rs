@@ -7,9 +7,7 @@ use std::process::{Command, Stdio};
 use super::check_if_binaries_exist;
 use super::version::extract_version_from_release;
 use crate::commands::BinaryName;
-use crate::handlers::download::{
-    download_latest_release, download_release_at_version,
-};
+use crate::handlers::download::{download_latest_release, download_release_at_version};
 use crate::handlers::{extract_component, update_after_install};
 use crate::mvr;
 use crate::paths::binaries_dir;
@@ -104,18 +102,18 @@ pub async fn install_from_nightly(
     let repo_url = name.repo_url();
     let binaries_folder = binaries_dir();
     let binaries_folder_branch = binaries_folder.join(branch);
-    let args = vec![
-        "install",
-        "--locked",
-        "--force",
-        "--git",
-        repo_url,
-        "--branch",
-        branch,
-        name.to_str(),
-        "--root",
-        binaries_folder_branch.to_str().unwrap(),
+    let mut args = vec![
+        "install", "--locked", "--force", "--git", repo_url, "--branch", branch,
     ];
+    if name == &BinaryName::Walrus {
+        args.push("walrus-service");
+        args.push("--bin");
+        args.push("walrus")
+    } else {
+        args.push(name.to_str());
+    }
+    args.extend(vec!["--root", binaries_folder_branch.to_str().unwrap()]);
+
     let mut cmd = Command::new("cargo");
     cmd.args(&args);
 
