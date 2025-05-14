@@ -145,10 +145,6 @@ pub enum DefaultCommands {
 pub enum BinaryName {
     #[value(name = "sui")]
     Sui,
-    #[value(name = "sui-bridge")]
-    SuiBridge,
-    #[value(name = "sui-faucet")]
-    SuiFaucet,
     #[value(name = "walrus")]
     Walrus,
     #[value(name = "mvr")]
@@ -174,8 +170,6 @@ impl BinaryName {
     pub fn to_str(&self) -> &str {
         match self {
             BinaryName::Sui => "sui",
-            BinaryName::SuiBridge => "sui-bridge",
-            BinaryName::SuiFaucet => "sui-faucet",
             BinaryName::Walrus => "walrus",
             BinaryName::Mvr => "mvr",
         }
@@ -186,8 +180,6 @@ impl std::fmt::Display for BinaryName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             BinaryName::Sui => write!(f, "sui"),
-            BinaryName::SuiBridge => write!(f, "sui-bridge"),
-            BinaryName::SuiFaucet => write!(f, "sui-faucet"),
             BinaryName::Walrus => write!(f, "walrus"),
             BinaryName::Mvr => write!(f, "mvr"),
         }
@@ -200,8 +192,6 @@ impl std::str::FromStr for BinaryName {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "sui" => Ok(BinaryName::Sui),
-            "sui-bridge" => Ok(BinaryName::SuiBridge),
-            "sui-faucet" => Ok(BinaryName::SuiFaucet),
             "walrus" => Ok(BinaryName::Walrus),
             "mvr" => Ok(BinaryName::Mvr),
             _ => Err(format!("Unknown binary: {}", s)),
