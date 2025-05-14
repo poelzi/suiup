@@ -24,13 +24,6 @@ mod tests {
         };
         assert_eq!(expected, result,);
 
-        let result = parse_component_with_version("sui-bridge devnet")?;
-        let expected = CommandMetadata {
-            name: BinaryName::SuiBridge,
-            network: "devnet".to_string(),
-            version: None,
-        };
-        assert_eq!(expected, result);
         let result = parse_component_with_version("walrus")?;
         let expected = CommandMetadata {
             name: BinaryName::Walrus,
@@ -60,8 +53,6 @@ mod tests {
     #[test]
     fn test_sui_component_display() {
         assert_eq!(BinaryName::Sui.to_string(), "sui");
-        assert_eq!(BinaryName::SuiBridge.to_string(), "sui-bridge");
-        assert_eq!(BinaryName::SuiFaucet.to_string(), "sui-faucet");
         assert_eq!(BinaryName::Mvr.to_string(), "mvr");
         assert_eq!(BinaryName::Walrus.to_string(), "walrus");
     }
