@@ -27,14 +27,14 @@ async fn main() -> Result<(), Error> {
     match args.command {
         Commands::Default(cmd) => handle_default(cmd)?,
         Commands::Install {
-            components,
+            component,
             nightly,
             debug,
             yes,
         } => {
             handle_cmd(
                 ComponentCommands::Add {
-                    components,
+                    component,
                     nightly,
                     debug,
                     yes,

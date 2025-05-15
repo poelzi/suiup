@@ -28,9 +28,9 @@ pub enum Commands {
     Install {
         #[arg(
             num_args = 1..=2,
-            help = "Binary to install with optional version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
+            help = "Binary to install with optional version (e.g. 'sui', 'sui@testnet-v1.39.3', 'sui@testnet')"
         )]
-        components: Vec<String>,
+        component: String,
         #[arg(
             long,
             required = false,
@@ -63,11 +63,10 @@ pub enum Commands {
     #[command(about = "Update binary")]
     Update {
         #[arg(
-            num_args = 1..=2,
             help = "Binary to update (e.g. 'sui', 'mvr', 'walrus'). By default, it will update the default \
-            binary version. For updating a specific release or branch, pass in the release name / branch name."
+            binary version. For updating a specific release or branch, use the `sui@testnet` form."
         )]
-        name: Vec<String>,
+        name: String,
         #[arg(short, long, help = "Accept defaults without prompting")]
         yes: bool,
     },
@@ -83,9 +82,9 @@ pub enum ComponentCommands {
     Add {
         #[arg(
             num_args = 1..=2,
-            help = "Binary to install with optional version (e.g. 'sui', 'sui testnet-v1.39.3', 'sui testnet')"
+            help = "Binary to install with optional version (e.g. 'sui', 'sui@testnet-v1.39.3', 'sui@testnet')"
         )]
-        components: Vec<String>,
+        component: String,
         #[arg(
             long,
             help = "Whether to install the debug version of the binary (only available for sui). Default is false."
@@ -119,7 +118,7 @@ pub enum DefaultCommands {
     #[command(about = "Set the default Sui CLI version")]
     Set {
         #[arg(
-            help = "Binary to be set as default and the version (e.g. 'sui testnet-v1.39.3', 'sui testnet' -- this will use an installed binary that has the higest testnet version)"
+            help = "Binary to be set as default and the version (e.g. 'sui testnet-v1.39.3', 'sui testnet' -- this will use an installed binary that has the highest testnet version)"
         )]
         name: Vec<String>,
         #[arg(
@@ -200,7 +199,7 @@ impl std::str::FromStr for BinaryName {
 }
 
 pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::Error> {
-    let parts: Vec<&str> = s.split_whitespace().collect();
+    let parts: Vec<&str> = s.split('@').collect();
 
     match parts.len() {
         1 => {
