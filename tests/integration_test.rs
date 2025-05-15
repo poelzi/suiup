@@ -47,7 +47,7 @@ mod tests {
 
         // NOT OK: nightly + version specified
         let mut cmd = suiup_command(
-            vec!["install", "sui", "testnet-v1.40.1", "--nightly"],
+            vec!["install", "sui@testnet-v1.40.1", "--nightly"],
             &test_env,
         );
         cmd.assert().failure().stderr(predicate::str::contains(
@@ -75,7 +75,7 @@ mod tests {
         test_env.copy_testnet_releases_to_cache()?;
 
         // Run install command
-        let mut cmd = suiup_command(vec!["install", "sui", "testnet-v1.39.3", "-y"], &test_env);
+        let mut cmd = suiup_command(vec!["install", "sui@testnet-v1.39.3", "-y"], &test_env);
 
         #[cfg(windows)]
         let assert_string = "'sui.exe' extracted successfully!";
@@ -131,7 +131,7 @@ mod tests {
 
         // Run install command
         let mut cmd = suiup_command(
-            vec!["install", "sui", "testnet-v1.39.3", "--debug", "-y"],
+            vec!["install", "sui@testnet-v1.39.3", "--debug", "-y"],
             &test_env,
         );
 
@@ -191,7 +191,7 @@ mod tests {
         test_env.initialize_paths()?;
 
         // Install older version
-        let mut cmd = suiup_command(vec!["install", "mvr", "v0.0.4", "-y"], &test_env);
+        let mut cmd = suiup_command(vec!["install", "mvr@v0.0.4", "-y"], &test_env);
         cmd.assert().success();
 
         // Run update
@@ -227,7 +227,7 @@ mod tests {
         test_env.copy_testnet_releases_to_cache()?;
 
         // Install 1.39.3
-        let mut cmd = suiup_command(vec!["install", "sui", "testnet-v1.39.3", "-y"], &test_env);
+        let mut cmd = suiup_command(vec!["install", "sui@testnet-v1.39.3", "-y"], &test_env);
         #[cfg(windows)]
         let assert_string = "'sui.exe' extracted successfully!";
         #[cfg(not(windows))]
@@ -249,7 +249,7 @@ mod tests {
 
         println!("Here 2");
         // Install 1.40.1
-        let mut cmd = suiup_command(vec!["install", "sui", "testnet-v1.40.1", "-y"], &test_env);
+        let mut cmd = suiup_command(vec!["install", "sui@testnet-v1.40.1", "-y"], &test_env);
         cmd.assert()
             .success()
             .stdout(predicate::str::contains(assert_string));
@@ -332,10 +332,7 @@ mod tests {
         test_env.copy_testnet_releases_to_cache()?;
 
         // Run install command
-        let mut cmd = suiup_command(
-            vec!["install", "walrus", "testnet-v1.18.2", "-y"],
-            &test_env,
-        );
+        let mut cmd = suiup_command(vec!["install", "walrus@testnet-v1.18.2", "-y"], &test_env);
 
         #[cfg(windows)]
         let assert_string = "'walrus.exe' extracted successfully!";

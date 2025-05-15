@@ -17,16 +17,15 @@ use anyhow::{bail, Error};
 
 /// Handles the `update` command
 pub async fn handle_update(
-    binary_name: Vec<String>,
+    binary_name: String,
     yes: bool,
     github_token: Option<String>,
 ) -> Result<(), Error> {
-    if binary_name.is_empty() || binary_name.len() > 2 {
+    if binary_name.is_empty() {
         bail!("Invalid number of arguments for `update` command");
     }
 
-    let CommandMetadata { name, version, .. } =
-        parse_component_with_version(&binary_name.join(" "))?;
+    let CommandMetadata { name, version, .. } = parse_component_with_version(&binary_name)?;
 
     if version.is_some() {
         bail!("Update should be done without a version. Use `suiup install` to specify a version");
@@ -71,7 +70,7 @@ pub async fn handle_update(
     if name == BinaryName::Mvr {
         handle_cmd(
             ComponentCommands::Add {
-                components: binary_name,
+                component: binary_name,
                 debug: false,
                 nightly: None,
                 yes,
@@ -85,7 +84,7 @@ pub async fn handle_update(
     if name == BinaryName::Walrus {
         handle_cmd(
             ComponentCommands::Add {
-                components: binary_name,
+                component: binary_name,
                 debug: false,
                 nightly: None,
                 yes,
@@ -113,7 +112,7 @@ pub async fn handle_update(
         println!("Updating {name} to {v} from {n} release");
         handle_cmd(
             ComponentCommands::Add {
-                components: binary_name.clone(),
+                component: binary_name.clone(),
                 debug: false,
                 nightly: None,
                 yes,

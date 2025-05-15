@@ -1,4 +1,4 @@
-> [!CAUTION] 
+> [!CAUTION]
 > Highly experimental, use at your own risk. Not recommended for production use. No warranty is provided. Might scrap it and rewrite it later!!!
 
 # Overview
@@ -51,13 +51,13 @@ suiup install sui
 
 ### Install `sui` with specific version
 ```bash
-suiup install sui v1.44.2 # this will install the testnet-v1.44.2 release
+suiup install sui@v1.44.2 # this will install the testnet-v1.44.2 release
 ```
 
 ### Install `sui` with specific release (and version)
 ```bash
-suiup install sui devnet # this will install the latest available devnet release
-suiup install sui testnet-v1.40.1 # this will install the testnet v1.40.1 release
+suiup install sui@devnet # this will install the latest available devnet release
+suiup install sui@testnet-v1.40.1 # this will install the testnet v1.40.1 release
 ```
 
 ### Update `sui` to latest version
@@ -80,7 +80,7 @@ suiup install walrus -y
 ### Install `mvr` (Move Registry CLI)
 ```bash
 suiup install mvr
-suiup install mvr v0.0.8 # this will install the MVR CLI v0.0.8 release
+suiup install mvr@v0.0.8 # this will install the MVR CLI v0.0.8 release
 ```
 
 ### List available binaries to install
@@ -119,6 +119,8 @@ Installing a nightly version is highly experimental and might not work as expect
 > `--nightly` will replace the current nightly binary, if any. Currently, there's no support for multiple nightly versions. Hope to add it in the future!
 
 ### Install from branch (requires cargo + rust installed!)
+
+
 ```bash
 suiup install mvr --nightly # installs from main if branch name is omitted
 suiup install mvr --nightly my_branch
@@ -127,6 +129,8 @@ suiup install mvr --nightly my_branch
 > There is a `--debug` flag that can be used in two ways:
 > - for `sui` binary, it will install the `sui-debug` binary from the release archive which contains debug symbols and it's required to run `sui move test --coverage`.
 > - for when using `--nightly`, it will build the binary from source with debug symbols. By default, `--nightly` builds in release mode as per `cargo install`'s defaults.
+
+Note that installing from a branch and specifying a version are mutually exclusive (in other words, `suiup install sui@some-version --nightly some-branch` will cause an error).
 
 ### Install MVR from nightly in debug mode
 ```bash
@@ -200,7 +204,7 @@ Make sure the folder where the default binaries are stored is on the `PATH` envi
 
 ### It looks like it's not calling the right binaries, the binary version does not change
 
-The order of the folders in the `PATH` environment variable matters. Make sure the folder where the default binaries are stored (see above) is before the folder where you might already have 
+The order of the folders in the `PATH` environment variable matters. Make sure the folder where the default binaries are stored (see above) is before the folder where you might already have
 some other versions of these binaries copied to. In Unix/MacOS use `which sui/mvr/walrus` to see the path of the binary that is being called.
 Use `suiup which` to see where the default binaries are stored.
 

@@ -32,16 +32,11 @@ pub async fn handle_cmd(cmd: ComponentCommands, github_token: Option<String>) ->
             }
         }
         ComponentCommands::Add {
-            components,
+            component,
             nightly,
             debug,
             yes,
         } => {
-            if components.is_empty() {
-                print!("No components provided. Use `suiup list` to see available components.");
-                return Ok(());
-            }
-
             // Ensure installation directories exist
             let default_bin_dir = get_default_bin_dir();
             create_dir_all(&default_bin_dir)?;
@@ -49,13 +44,11 @@ pub async fn handle_cmd(cmd: ComponentCommands, github_token: Option<String>) ->
             let installed_bins_dir = binaries_dir();
             create_dir_all(&installed_bins_dir)?;
 
-            let components = components.join(" ");
-            let component =
-                parse_component_with_version(&components).map_err(|e| anyhow!("{e}"))?;
-
-            let name = component.name;
-            let network = component.network;
-            let version = component.version;
+            let command_metadata =
+                parse_component_with_version(&component).map_err(|e| anyhow!("{e}"))?;
+            let name = command_metadata.name;
+            let network = command_metadata.network;
+            let version = command_metadata.version;
             let available_components = available_components();
             if !available_components.contains(&name.to_string().as_str()) {
                 bail!("Binary {} does not exist", name);

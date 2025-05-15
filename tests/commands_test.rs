@@ -16,7 +16,7 @@ mod tests {
         };
         assert_eq!(expected, result);
 
-        let result = parse_component_with_version("sui testnet-v1.39.3")?;
+        let result = parse_component_with_version("sui@testnet-v1.39.3")?;
         let expected = CommandMetadata {
             name: BinaryName::Sui,
             network: "testnet".to_string(),
