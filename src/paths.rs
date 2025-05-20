@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Error;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::env;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
@@ -142,7 +142,7 @@ pub fn default_file_path() -> Result<PathBuf, Error> {
     let path = get_config_file("default_version.json");
     if !path.exists() {
         let mut file = File::create(&path)?;
-        let default = HashMap::<String, (String, String)>::new();
+        let default = BTreeMap::<String, (String, String)>::new();
         let default_str = serde_json::to_string_pretty(&default)?;
         file.write_all(default_str.as_bytes())?;
     }

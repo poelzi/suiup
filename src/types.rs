@@ -4,7 +4,7 @@
 use anyhow::{anyhow, Error};
 use std::io::Write;
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fmt::{self, Display, Formatter},
     path::PathBuf,
     str::FromStr,
@@ -151,7 +151,7 @@ impl DefaultBinaries {
 
 impl Display for Binaries {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let mut s: HashMap<String, Vec<(String, String, bool)>> = HashMap::new();
+        let mut s: BTreeMap<String, Vec<(String, String, bool)>> = BTreeMap::new();
 
         for b in self.binaries.clone() {
             if let Some(binaries) = s.get_mut(&b.network_release) {
@@ -195,8 +195,8 @@ impl Display for Network {
     }
 }
 
-impl From<HashMap<String, (String, Version, bool)>> for Binaries {
-    fn from(map: HashMap<String, (String, Version, bool)>) -> Self {
+impl From<BTreeMap<String, (String, Version, bool)>> for Binaries {
+    fn from(map: BTreeMap<String, (String, Version, bool)>) -> Self {
         let binaries = map
             .iter()
             .map(|(k, v)| BinaryVersion {

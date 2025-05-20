@@ -10,7 +10,7 @@ use crate::{
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use tracing::debug;
 
@@ -23,7 +23,8 @@ pub fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
         DefaultCommands::Get => {
             // let default_binaries = DefaultBinaries::load()?;
             let default = std::fs::read_to_string(default_file_path()?)?;
-            let default: HashMap<String, (String, Version, bool)> = serde_json::from_str(&default)?;
+            let default: BTreeMap<String, (String, Version, bool)> =
+                serde_json::from_str(&default)?;
             let default_binaries = Binaries::from(default);
             println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");
         }

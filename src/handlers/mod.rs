@@ -9,9 +9,10 @@ use flate2::read::GzDecoder;
 use std::env;
 use std::io::Write;
 use std::path::PathBuf;
-use std::{collections::HashMap, fs::File, io::BufReader};
+use std::{fs::File, io::BufReader};
 
 use crate::types::{BinaryVersion, InstalledBinaries};
+use std::collections::BTreeMap;
 #[cfg(not(windows))]
 use std::fs::set_permissions;
 #[cfg(not(windows))]
@@ -46,7 +47,7 @@ pub fn update_default_version_file(
     let path = default_file_path()?;
     let file = File::open(&path)?;
     let reader = BufReader::new(file);
-    let mut map: HashMap<String, (String, Version, bool)> = serde_json::from_reader(reader)?;
+    let mut map: BTreeMap<String, (String, Version, bool)> = serde_json::from_reader(reader)?;
 
     for binary in binaries {
         let b = map.get_mut(binary);
@@ -321,14 +322,14 @@ pub fn check_if_binaries_exist(
 /// Returns a map of installed binaries grouped by network releases
 pub fn installed_binaries_grouped_by_network(
     installed_binaries: Option<InstalledBinaries>,
-) -> Result<HashMap<String, Vec<BinaryVersion>>, Error> {
+) -> Result<BTreeMap<String, Vec<BinaryVersion>>, Error> {
     let installed_binaries = if let Some(installed_binaries) = installed_binaries {
         installed_binaries
     } else {
         InstalledBinaries::new()?
     };
     let binaries = installed_binaries.binaries();
-    let mut files_by_folder: HashMap<String, Vec<BinaryVersion>> = HashMap::new();
+    let mut files_by_folder: BTreeMap<String, Vec<BinaryVersion>> = BTreeMap::new();
 
     for b in binaries {
         if let Some(f) = files_by_folder.get_mut(&b.network_release.to_string()) {

@@ -7,12 +7,12 @@ use crate::{
     types::{Binaries, Version},
 };
 use anyhow::Error;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Handles the `show` command
 pub fn handle_show() -> Result<(), Error> {
     let default = std::fs::read_to_string(default_file_path()?)?;
-    let default: HashMap<String, (String, Version, bool)> = serde_json::from_str(&default)?;
+    let default: BTreeMap<String, (String, Version, bool)> = serde_json::from_str(&default)?;
     let default_binaries = Binaries::from(default);
 
     println!("\x1b[1mDefault binaries:\x1b[0m\n{default_binaries}");

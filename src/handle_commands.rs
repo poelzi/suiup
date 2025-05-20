@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
@@ -134,7 +134,7 @@ pub async fn handle_cmd(cmd: ComponentCommands, github_token: Option<String>) ->
             let default_file = default_file_path()?;
             let default = std::fs::read_to_string(&default_file)
                 .map_err(|_| anyhow!("Cannot read file {}", default_file.display()))?;
-            let mut default_binaries: HashMap<String, (String, Version, bool)> =
+            let mut default_binaries: BTreeMap<String, (String, Version, bool)> =
                 serde_json::from_str(&default).map_err(|_| {
                     anyhow!("Cannot decode default binary file to JSON. Is the file corrupted?")
                 })?;
