@@ -1,5 +1,5 @@
 > [!CAUTION]
-> Highly experimental, use at your own risk. Not recommended for production use. No warranty is provided. Might scrap it and rewrite it later!!!
+> Highly experimental, use at your own risk. Not recommended for production use. No warranty is provided and we are not liable for any issues.
 
 # Overview
 `suiup` is a tool to install and manage different versions of CLI tools for working in the Sui ecosystem. It allows you to easily install and switch between different versions of `sui`, `mvr`, `walrus`.
@@ -36,6 +36,13 @@ cargo install --git https://github.com/Mystenlabs/suiup.git --locked
 2. Unzip the downloaded file.
 3. Add the `suiup` binary to folder that is on your `PATH` environment variable, or add that folder to the `PATH`.
 4. (Optional) restart your terminal if you made changes to your `PATH`.
+
+# Prerequisites
+
+``Path Ordering Matters``
+
+If you already have installed one of sui/mvr/walrus binaries before, you will need to make sure that you either remove those binaries
+or set the `PATH` to the `/.local/bin` (MacOS/Linux or equivalent for Windows) before the `PATH` where those binaries are installed.
 
 # Quick Start
 
@@ -186,8 +193,7 @@ The tool uses these environment variables to store data.
 ## Known issues
 - `suiup install mvr --nightly` might fail on **Windows** because of issues with compiling the `mvr-cli` crate from the repository. Just install the latest release instead.
 - `suiup remove` does not work well. Do not use it.
-- `suiup install walrus` will always install the latest binary. Need some work to properly support Walrus CLI!
-
+- There is no cleanup functionality, so the cache might grow bigger.
 ## Troubleshooting
 
 ### `suiup` is not recognized as a command
