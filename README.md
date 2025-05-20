@@ -51,13 +51,17 @@ suiup install sui
 
 ### Install `sui` with specific version
 ```bash
-suiup install sui@v1.44.2 # this will install the testnet-v1.44.2 release
+suiup install sui@1.44.2 # this will install the testnet-v1.44.2 release
 ```
+
+> [!TIP]
+> You can also use `==` or `=` to specify a version: `sui@1.44.2` is the same as `sui==1.44.2` or `sui=1.44.2`.
+
 
 ### Install `sui` with specific release (and version)
 ```bash
 suiup install sui@devnet # this will install the latest available devnet release
-suiup install sui@testnet-v1.40.1 # this will install the testnet v1.40.1 release
+suiup install sui@testnet-1.40.1 # this will install the testnet v1.40.1 release
 ```
 
 ### Update `sui` to latest version
@@ -80,7 +84,7 @@ suiup install walrus -y
 ### Install `mvr` (Move Registry CLI)
 ```bash
 suiup install mvr
-suiup install mvr@v0.0.8 # this will install the MVR CLI v0.0.8 release
+suiup install mvr@0.0.8 # this will install the MVR CLI v0.0.8 release
 ```
 
 ### List available binaries to install
@@ -96,9 +100,9 @@ suiup show
 ### Switch between versions. Note that `default set` requires to specify a version!
 ```bash
 suiup default get
-suiup default set sui testnet-v1.40.0
-suiup default set mvr v0.0.7
-suiup default set sui testnet-v1.40.0 --debug # set the default version to be the sui-debug binary
+suiup default set sui@testnet-1.40.0
+suiup default set mvr@0.0.7
+suiup default set sui@testnet-1.40.0 --debug # set the default version to be the sui-debug binary
 ```
 
 ### Show where the default binaries are installed

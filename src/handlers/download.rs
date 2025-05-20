@@ -3,7 +3,6 @@
 
 use crate::handlers::release::find_last_release_by_network;
 use crate::handlers::version::extract_version_from_release;
-use crate::handlers::GITHUB_REPO;
 use crate::types::Repo;
 use crate::{handlers::release::release_list, paths::release_archive_dir, types::Release};
 use anyhow::{anyhow, bail, Error};
@@ -21,13 +20,13 @@ pub fn detect_os_arch() -> Result<(String, String), Error> {
         whoami::Platform::Linux => "ubuntu",
         whoami::Platform::Windows => "windows",
         whoami::Platform::MacOS => "macos",
-        _ => anyhow::bail!("Unsupported OS. Supported only: Linux, Windows, MacOS"),
+        _ => bail!("Unsupported OS. Supported only: Linux, Windows, MacOS"),
     };
     let arch = match std::env::consts::ARCH {
         "x86_64" => "x86_64",
         "aarch64" if os == "macos" => "arm64",
         "aarch64" => "aarch64",
-        _ => anyhow::bail!("Unsupported architecture. Supported only: x86_64, aarch64"),
+        _ => bail!("Unsupported architecture. Supported only: x86_64, aarch64"),
     };
 
     println!("Detected: {os}-{arch}...");
@@ -44,13 +43,20 @@ pub async fn download_release_at_version(
 ) -> Result<String, anyhow::Error> {
     let (os, arch) = detect_os_arch()?;
 
+    // releases on GitHub are prefixed with `v` before the major.minor.patch version
+    let version = if version.starts_with("v") {
+        version.to_string()
+    } else {
+        format!("v{version}")
+    };
+
     let tag = format!("{}-{}", network, version);
 
     println!("Searching for release with tag: {}...", tag);
     let client = reqwest::blocking::Client::new();
     let mut headers = HeaderMap::new();
 
-    let releases = release_list(repo, github_token.clone()).await?.0;
+    let releases = release_list(&repo, github_token.clone()).await?.0;
 
     if let Some(release) = releases
         .iter()
@@ -68,14 +74,11 @@ pub async fn download_release_at_version(
             );
         }
 
-        let url = format!(
-            "https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{}",
-            tag
-        );
+        let url = format!("https://api.github.com/repos/{repo}/releases/tags/{}", tag);
         let response = client.get(&url).headers(headers).send()?;
 
         if !response.status().is_success() {
-            anyhow::bail!("release {tag} not found");
+            bail!("release {tag} not found");
         }
 
         let release: Release = response.json()?;
@@ -90,7 +93,7 @@ pub async fn download_latest_release(
     github_token: Option<String>,
 ) -> Result<String, anyhow::Error> {
     println!("Downloading release list");
-    let releases = release_list(repo, github_token.clone()).await?;
+    let releases = release_list(&repo, github_token.clone()).await?;
 
     let (os, arch) = detect_os_arch()?;
 

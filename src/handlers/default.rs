@@ -33,15 +33,15 @@ pub fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             debug,
             nightly,
         } => {
-            if name.len() != 2 && nightly.is_none() {
-                bail!("Invalid number of arguments. Version is required: 'sui testnet-v1.39.3', 'sui testnet' -- this will use an installed binary that has the highest testnet version. \n For `mvr` only pass the version: `mvr v0.0.5`")
+            if name.is_empty() && nightly.is_none() {
+                bail!("Invalid number of arguments. Version is required: 'sui@testnet-1.39.3', 'sui@testnet' -- this will use an installed binary that has the highest testnet version. \n For `mvr` only pass the version: `mvr@0.0.5`")
             }
 
             let CommandMetadata {
                 name,
                 network,
                 version,
-            } = parse_component_with_version(&name.join("@"))?;
+            } = parse_component_with_version(&name)?;
 
             let network = if name == BinaryName::Mvr {
                 if let Some(ref nightly) = nightly {
@@ -68,7 +68,11 @@ pub fn handle_default(cmd: DefaultCommands) -> Result<(), Error> {
             }
 
             let version = if let Some(version) = version {
-                version
+                if version.starts_with("v") {
+                    version
+                } else {
+                    format!("v{version}")
+                }
             } else {
                 binaries
                     .iter()

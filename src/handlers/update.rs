@@ -95,7 +95,7 @@ pub async fn handle_update(
         return Ok(());
     }
 
-    let releases = release_list(Repo::Sui, github_token.clone()).await?.0;
+    let releases = release_list(&Repo::Sui, github_token.clone()).await?.0;
     let mut to_update = vec![];
     for (n, v) in &network_local_last_version {
         let last_release = last_release_for_network(&releases, n).await?;

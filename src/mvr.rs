@@ -68,7 +68,12 @@ impl MvrInstaller {
     /// Download the MVR CLI binary, if it does not exist in the binary folder.
     pub async fn download_version(&mut self, version: Option<String>) -> Result<String, Error> {
         let version = if let Some(v) = version {
-            v
+            // releases on GitHub are prefixed with `v` before the major.minor.patch version
+            if v.starts_with("v") {
+                v
+            } else {
+                format!("v{v}")
+            }
         } else {
             if self.releases.is_empty() {
                 self.get_releases()?;

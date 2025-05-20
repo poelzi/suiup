@@ -14,7 +14,7 @@ use crate::types::Repo;
 
 /// Fetches the list of releases from the GitHub repository
 pub async fn release_list(
-    repo: Repo,
+    repo: &Repo,
     github_token: Option<String>,
 ) -> Result<(Vec<Release>, Option<String>), anyhow::Error> {
     let release_url = format!("https://api.github.com/repos/{}/releases", repo);
@@ -27,7 +27,7 @@ pub async fn release_list(
     }
 
     // Add ETag for caching
-    if let Ok(etag) = read_etag_file() {
+    if let Ok(etag) = read_etag_file(&repo) {
         request = request.header(IF_NONE_MATCH, etag);
     }
 
@@ -38,7 +38,7 @@ pub async fn release_list(
     // note this only works with authenticated requests. Should add support for that later.
     if response.status() == reqwest::StatusCode::NOT_MODIFIED {
         // If nothing has changed, return an empty list and the existing ETag
-        if let Some((releases, etag)) = load_cached_release_list()
+        if let Some((releases, etag)) = load_cached_release_list(&repo)
             .map_err(|e| anyhow!("Cannot load release list from cache: {e}"))?
         {
             return Ok((releases, Some(etag)));
@@ -55,13 +55,16 @@ pub async fn release_list(
         bail!("Response error: {e}");
     }
     let releases: Vec<Release> = response.unwrap().json()?;
-    save_release_list(&releases, etag.clone())?;
+    save_release_list(&repo, &releases, etag.clone())?;
 
     Ok((releases, etag))
 }
 
-fn read_etag_file() -> Result<String, anyhow::Error> {
-    let etag_file = get_suiup_cache_dir().join("etag.txt");
+fn read_etag_file(repo: &Repo) -> Result<String, anyhow::Error> {
+    let repo_name = repo.to_string();
+    let repo_name = repo_name.replace("/", "_");
+    let filename = format!("etag_{}.txt", repo_name);
+    let etag_file = get_suiup_cache_dir().join(filename);
     if etag_file.exists() {
         std::fs::read_to_string(&etag_file)
             .map_err(|_| anyhow!("Cannot read from file {}", etag_file.display()))
@@ -80,13 +83,21 @@ pub async fn find_last_release_by_network(
         .find(|r| r.assets.iter().any(|a| a.name.contains(network)))
 }
 
-fn save_release_list(releases: &[Release], etag: Option<String>) -> Result<(), anyhow::Error> {
+fn save_release_list(
+    repo: &Repo,
+    releases: &[Release],
+    etag: Option<String>,
+) -> Result<(), anyhow::Error> {
     println!("Saving releases list to cache");
+    let repo_name = repo.to_string();
+    let repo_name = repo_name.replace("/", "_");
+    let etag_filename = format!("etag_{}.txt", repo_name);
+    let releases_filename = format!("releases_{}.txt", repo_name);
     let cache_dir = get_suiup_cache_dir();
     std::fs::create_dir_all(&cache_dir).expect("Could not create cache directory");
 
-    let cache_file = cache_dir.join("releases.json");
-    let etag_file = cache_dir.join("etag.txt");
+    let cache_file = cache_dir.join(releases_filename);
+    let etag_file = cache_dir.join(etag_filename);
 
     let cache_content =
         serde_json::to_string_pretty(releases).expect("Could not serialize releases file: {}");
@@ -104,9 +115,13 @@ fn save_release_list(releases: &[Release], etag: Option<String>) -> Result<(), a
     Ok(())
 }
 
-fn load_cached_release_list() -> Result<Option<(Vec<Release>, String)>, anyhow::Error> {
-    let cache_file = get_suiup_cache_dir().join("releases.json");
-    let etag_file = get_suiup_cache_dir().join("etag.txt");
+fn load_cached_release_list(repo: &Repo) -> Result<Option<(Vec<Release>, String)>, anyhow::Error> {
+    let repo_name = repo.to_string();
+    let repo_name = repo_name.replace("/", "_");
+    let etag_filename = format!("etag_{}.txt", repo_name);
+    let releases_filename = format!("releases_{}.txt", repo_name);
+    let cache_file = get_suiup_cache_dir().join(releases_filename);
+    let etag_file = get_suiup_cache_dir().join(etag_filename);
 
     if cache_file.exists() && etag_file.exists() {
         let cache_content: Vec<Release> = serde_json::from_str(

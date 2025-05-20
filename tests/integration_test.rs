@@ -75,7 +75,7 @@ mod tests {
         test_env.copy_testnet_releases_to_cache()?;
 
         // Run install command
-        let mut cmd = suiup_command(vec!["install", "sui@testnet-v1.39.3", "-y"], &test_env);
+        let mut cmd = suiup_command(vec!["install", "sui@testnet-1.39.3", "-y"], &test_env);
 
         #[cfg(windows)]
         let assert_string = "'sui.exe' extracted successfully!";
@@ -131,7 +131,7 @@ mod tests {
 
         // Run install command
         let mut cmd = suiup_command(
-            vec!["install", "sui@testnet-v1.39.3", "--debug", "-y"],
+            vec!["install", "sui@testnet-1.39.3", "--debug", "-y"],
             &test_env,
         );
 
@@ -191,7 +191,7 @@ mod tests {
         test_env.initialize_paths()?;
 
         // Install older version
-        let mut cmd = suiup_command(vec!["install", "mvr@v0.0.4", "-y"], &test_env);
+        let mut cmd = suiup_command(vec!["install", "mvr@0.0.4", "-y"], &test_env);
         cmd.assert().success();
 
         // Run update
@@ -227,7 +227,7 @@ mod tests {
         test_env.copy_testnet_releases_to_cache()?;
 
         // Install 1.39.3
-        let mut cmd = suiup_command(vec!["install", "sui@testnet-v1.39.3", "-y"], &test_env);
+        let mut cmd = suiup_command(vec!["install", "sui@testnet-1.39.3", "-y"], &test_env);
         #[cfg(windows)]
         let assert_string = "'sui.exe' extracted successfully!";
         #[cfg(not(windows))]
@@ -235,7 +235,6 @@ mod tests {
         cmd.assert()
             .success()
             .stdout(predicate::str::contains(assert_string));
-        println!("Here 1");
         // Test binary execution
         #[cfg(windows)]
         let default_sui_binary = test_env.bin_dir.join("sui.exe");
@@ -247,13 +246,11 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("1.39.3"));
 
-        println!("Here 2");
         // Install 1.40.1
-        let mut cmd = suiup_command(vec!["install", "sui@testnet-v1.40.1", "-y"], &test_env);
+        let mut cmd = suiup_command(vec!["install", "sui@testnet-1.40.1", "-y"], &test_env);
         cmd.assert()
             .success()
             .stdout(predicate::str::contains(assert_string));
-        println!("Here 3");
         // Test binary execution
         let mut cmd = Command::new(&default_sui_binary);
         cmd.arg("--version");
@@ -261,10 +258,8 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("1.40.1"));
 
-        println!("Here 4");
         // Switch from 1.39.3 to 1.40.1
-
-        let mut cmd = suiup_command(vec!["default", "set", "sui", "testnet-v1.39.3"], &test_env);
+        let mut cmd = suiup_command(vec!["default", "set", "sui@testnet-1.39.3"], &test_env);
         cmd.assert().success();
 
         let mut cmd = Command::new(default_sui_binary);
@@ -305,10 +300,7 @@ mod tests {
         cmd.assert().success();
 
         // Switch version to the one we installed from release
-        let mut cmd = suiup_command(
-            vec!["default", "set", "mvr", &format!("v{version}")],
-            &test_env,
-        );
+        let mut cmd = suiup_command(vec!["default", "set", &format!("mvr@{version}")], &test_env);
         cmd.assert().success();
 
         let mut version_cmd = Command::new(&default_mvr_binary);

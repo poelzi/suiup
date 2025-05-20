@@ -27,8 +27,7 @@ pub enum Commands {
     #[command(about = "Install a binary")]
     Install {
         #[arg(
-            num_args = 1..=2,
-            help = "Binary to install with optional version (e.g. 'sui', 'sui@testnet-v1.39.3', 'sui@testnet')"
+            help = "Binary to install with optional version (e.g. 'sui', 'sui@1.40.1', 'sui@testnet', 'sui@testnet-1.39.3')"
         )]
         component: String,
         #[arg(
@@ -64,7 +63,7 @@ pub enum Commands {
     Update {
         #[arg(
             help = "Binary to update (e.g. 'sui', 'mvr', 'walrus'). By default, it will update the default \
-            binary version. For updating a specific release or branch, use the `sui@testnet` form."
+            binary version. For updating a specific release, use the `sui@testnet` form."
         )]
         name: String,
         #[arg(short, long, help = "Accept defaults without prompting")]
@@ -82,7 +81,7 @@ pub enum ComponentCommands {
     Add {
         #[arg(
             num_args = 1..=2,
-            help = "Binary to install with optional version (e.g. 'sui', 'sui@testnet-v1.39.3', 'sui@testnet')"
+            help = "Binary to install with optional version (e.g. 'sui', 'sui@testnet-1.39.3', 'sui@testnet')"
         )]
         component: String,
         #[arg(
@@ -118,9 +117,9 @@ pub enum DefaultCommands {
     #[command(about = "Set the default Sui CLI version")]
     Set {
         #[arg(
-            help = "Binary to be set as default and the version (e.g. 'sui testnet-v1.39.3', 'sui testnet' -- this will use an installed binary that has the highest testnet version)"
+            help = "Binary to be set as default and the version (e.g. 'sui@testnet-1.39.3', 'sui@testnet' -- this will use an installed binary that has the highest testnet version)"
         )]
-        name: Vec<String>,
+        name: String,
         #[arg(
             long,
             help = "Whether to set the debug version of the binary as default (only available for sui)."
@@ -199,7 +198,18 @@ impl std::str::FromStr for BinaryName {
 }
 
 pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::Error> {
-    let parts: Vec<&str> = s.split('@').collect();
+    let split_char = if s.contains("@") {
+        "@"
+    } else if s.contains("==") {
+        "=="
+    } else if s.contains("=") {
+        "="
+    } else {
+        // TODO this is a hack because we don't have a better way to split
+        " "
+    };
+
+    let parts: Vec<&str> = s.split(split_char).collect();
 
     match parts.len() {
         1 => {
@@ -231,7 +241,6 @@ pub fn parse_component_with_version(s: &str) -> Result<CommandMetadata, anyhow::
 pub fn parse_version_spec(spec: Option<String>) -> Result<(String, Option<String>), Error> {
     match spec {
         None => Ok(("testnet".to_string(), None)),
-        Some(spec) if spec.starts_with("v") => Ok(("testnet".to_string(), Some(spec))),
         Some(spec) => {
             if spec.starts_with("testnet-")
                 || spec.starts_with("devnet-")

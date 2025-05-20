@@ -28,11 +28,10 @@ pub mod update;
 pub mod version;
 pub mod which;
 
-pub const GITHUB_REPO: &str = "MystenLabs/sui";
 pub const RELEASES_ARCHIVES_FOLDER: &str = "releases";
 
 pub fn available_components() -> &'static [&'static str] {
-    &["sui", "sui-bridge", "sui-faucet", "walrus", "mvr"]
+    &["sui", "walrus", "mvr"]
 }
 
 // Main component handling function
