@@ -1,11 +1,24 @@
 > [!CAUTION]
 > Highly experimental, use at your own risk. Not recommended for production use. This software is provided as is.
 
-# Overview
+# Suiup - installer and manager of CLI tools in the Sui ecosystem
 `suiup` is a tool to install and manage different versions of CLI tools for working in the Sui ecosystem. It allows you to easily install and switch between different versions of `sui`, `mvr`, `walrus`.
-After installation, run `suiup list` to find which binaries you can install.
+After installation, run `suiup list` to find which binaries you can install. Check out the [Installation](#installation) to install and the [Quick Start](#quick-start) guide for how-to-use examples.
 
-Check out the [Installation](#installation) to install and the [Quick Start](#quick-start) guide for how-to-use examples.
+# Why suiup? 
+The Sui CLI has long been available through tools like Homebrew, Chocolatey, or cargo install, or by downloading binaries manually. But with Sui releasing updates every two weeks, developers often need to upgrade frequently or use a specific version (e.g., for devnet or debug builds). Switching between versions or installing non-package-managers builds is not as simple as we want it to be.
+
+As new tools like [mvr](https://docs.suins.io/move-registry#using-mvr) and [walrus](https://docs.wal.app/usage/setup.html) were introduced—without support from package managers—managing them became even harder due to manual installation steps.
+
+`suiup` solves this by offering a simple way to install and manage multiple CLI tools and their versions in the Sui ecosystem.
+
+With `suiup`, you can:
+
+- Install specific versions of `sui`, `mvr`, or `walrus` (with more tools coming soon)
+- Install from a branch in the repository to try unreleased features or fixes
+- Get debug builds of `sui` (needed for commands like `sui move test --coverage`)
+- List and switch between installed binaries for different networks (e.g., devnet vs mainnet)
+- Simplify tool installation in CI environments
 
 # Supported OS (for suiup tool, but not necessarily for the binaries it installs)
 
