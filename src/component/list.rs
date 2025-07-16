@@ -1,14 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::commands::TABLE_FORMAT;
 use anyhow::Result;
+use comfy_table::*;
 
 /// List all available components
 pub async fn list_components() -> Result<()> {
     let components = crate::handlers::available_components();
-    println!("Available binaries to install:");
-    for component in components {
-        println!(" - {}", component);
-    }
+    let mut table = Table::new();
+    table.load_preset(TABLE_FORMAT)
+        .set_header(vec![Cell::new("Available Binaries to Install")])
+        .add_rows(
+            components.iter().map(|component| {
+                vec![Cell::new(component)]
+            }).collect::<Vec<Vec<Cell>>>(),
+        );
+    println!("{table}");
     Ok(())
 }

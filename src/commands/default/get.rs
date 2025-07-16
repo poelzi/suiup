@@ -11,18 +11,20 @@ use crate::{
     types::{Binaries, Version},
 };
 
+use crate::commands::print_table;
+
 /// Get the default Sui CLI version.
 #[derive(Args, Debug)]
 pub struct Command;
 
 impl Command {
     pub fn exec(&self) -> Result<()> {
-        // let default_binaries = DefaultBinaries::load()?;
         let default = std::fs::read_to_string(default_file_path()?)?;
         let default: BTreeMap<String, (String, Version, bool)> = serde_json::from_str(&default)?;
         let binaries = Binaries::from(default);
 
-        println!("\x1b[1mDefault binaries:\x1b[0m\n{binaries}");
+        println!("\x1b[1mDefault binaries:\x1b[0m");
+        print_table(&binaries.binaries);
         Ok(())
     }
 }
