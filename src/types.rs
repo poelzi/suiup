@@ -25,6 +25,17 @@ pub enum Repo {
     WalrusSites,
 }
 
+impl Repo {
+    /// Returns the binary name for this repository
+    pub fn binary_name(&self) -> &'static str {
+        match self {
+            Repo::Sui => "sui",
+            Repo::Walrus => "walrus",
+            Repo::Mvr => "mvr",
+        }
+    }
+}
+
 impl Display for Repo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
