@@ -7,10 +7,13 @@ mod list;
 mod remove;
 mod self_;
 mod show;
+mod switch;
 mod update;
 mod which;
 
+use crate::types::BinaryVersion;
 use crate::{handlers::self_::check_for_updates, types::BinaryVersion};
+
 use anyhow::{anyhow, bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use comfy_table::Table;
@@ -42,6 +45,7 @@ pub enum Commands {
     Self_(self_::Command),
 
     Show(show::Command),
+    Switch(switch::Command),
     Update(update::Command),
     Which(which::Command),
 }
@@ -60,6 +64,7 @@ impl Command {
             Commands::List(cmd) => cmd.exec(&self.github_token).await,
             Commands::Self_(cmd) => cmd.exec().await,
             Commands::Show(cmd) => cmd.exec(),
+            Commands::Switch(cmd) => cmd.exec(),
             Commands::Update(cmd) => cmd.exec(&self.github_token).await,
             Commands::Which(cmd) => cmd.exec(),
         }
