@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod doctor;
 mod install;
 mod list;
 mod remove;
@@ -25,6 +26,7 @@ impl ComponentManager {
     /// Handle component commands
     pub async fn handle_command(&self, cmd: ComponentCommands) -> Result<()> {
         match cmd {
+            ComponentCommands::Doctor => self.run_doctor_checks().await,
             ComponentCommands::List => self.list_components().await,
             ComponentCommands::Add {
                 component,
@@ -75,6 +77,12 @@ impl ComponentManager {
     async fn remove_component(&self, binary: BinaryName) -> Result<()> {
         remove::remove_component(binary).await
     }
+
+    /// Run diagnostic checks on the environment
+    pub async fn run_doctor_checks(&self) -> Result<()> {
+        doctor::run_doctor_checks().await
+    }
+
     /// Handle cleanup operations
     async fn handle_cleanup(&self, all: bool, days: u32, dry_run: bool) -> Result<()> {
         crate::handlers::cleanup::handle_cleanup(all, days, dry_run).await
