@@ -1,0 +1,227 @@
+name: Update Standalone Releases
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      auto_commit:
+        description: "Auto-commit changes to main branch (true) or create PR (false)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      force:
+        description: "Force re-download of all releases"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  update-releases:
+    name: Update Standalone Releases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Run update script
+        id: update
+        run: |
+          echo "Running update script..."
+
+          # Build the command with --no-color for CI environment
+          UPDATE_CMD="nix run .#update-releases -- --no-color"
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            UPDATE_CMD="$UPDATE_CMD --force"
+          fi
+
+          # Run the update script and capture output
+          $UPDATE_CMD 2>&1 | tee update-output.log
+
+          # Check if releases.json was modified
+          if git diff --quiet nix/releases.json; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes to releases.json"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in releases.json"
+          fi
+
+      - name: Verify only releases.json changed
+        if: steps.update.outputs.has_changes == 'true'
+        id: verify
+        run: |
+          # Get list of changed files
+          CHANGED_FILES=$(git diff --name-only)
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Check if only nix/releases.json changed
+          if [ "$CHANGED_FILES" = "nix/releases.json" ]; then
+            echo "valid=true" >> $GITHUB_OUTPUT
+            echo "✓ Only nix/releases.json was modified"
+          else
+            echo "valid=false" >> $GITHUB_OUTPUT
+            echo "✗ ERROR: Files other than nix/releases.json were modified!"
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+            exit 1
+          fi
+
+      - name: Extract update summary
+        if: steps.update.outputs.has_changes == 'true' && steps.verify.outputs.valid == 'true'
+        id: summary
+        run: |
+          # Extract changes summary from update output
+          echo "Extracting changes summary..."
+
+          # Create a summary for the commit/PR
+          cat > changes-summary.txt << 'EOF'
+          Update standalone releases
+
+          EOF
+
+          # Add the changes section from the log (no need to strip color codes with --no-color)
+          if grep -q "=== Changes Summary ===" update-output.log; then
+            sed -n '/=== Changes Summary ===/,/=== Available Versions ===/p' update-output.log | \
+              grep -v "=== Available Versions ===" >> changes-summary.txt
+          fi
+
+          # Add available versions section
+          echo "" >> changes-summary.txt
+          if grep -q "=== Available Versions ===" update-output.log; then
+            sed -n '/=== Available Versions ===/,/Example commands:/p' update-output.log | \
+              grep -v "Example commands:" >> changes-summary.txt
+          fi
+
+          # Create PR body
+          cat > pr-body.txt << 'EOF'
+          ## Automated Standalone Releases Update
+
+          This PR updates the standalone binary releases in `nix/releases.json`.
+
+          ### Changes
+
+          EOF
+          cat changes-summary.txt >> pr-body.txt
+
+          # Set commit message (first line only for commit, full for PR)
+          COMMIT_TITLE="chore: update standalone releases"
+          echo "commit_title=$COMMIT_TITLE" >> $GITHUB_OUTPUT
+
+      - name: Commit changes
+        if: steps.update.outputs.has_changes == 'true' && steps.verify.outputs.valid == 'true'
+        id: commit
+        run: |
+          # Stage the changes
+          git add nix/releases.json
+
+          # Create commit with summary
+          git commit -F changes-summary.txt || {
+            echo "Failed to create commit"
+            exit 1
+          }
+
+          # Generate branch name with timestamp
+          BRANCH_NAME="update-releases-$(date +%Y%m%d-%H%M%S)"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Determine action (auto-commit or PR)
+        if: steps.update.outputs.has_changes == 'true' && steps.verify.outputs.valid == 'true'
+        id: action
+        run: |
+          # Check if we should auto-commit
+          # Default to PR for scheduled runs, use input for manual runs
+          AUTO_COMMIT="${{ github.event.inputs.auto_commit }}"
+
+          if [ -z "$AUTO_COMMIT" ]; then
+            AUTO_COMMIT="false"
+          fi
+
+          echo "auto_commit=$AUTO_COMMIT" >> $GITHUB_OUTPUT
+          echo "Will $([ "$AUTO_COMMIT" = "true" ] && echo "auto-commit" || echo "create PR")"
+
+      - name: Push directly to main (auto-commit)
+        if: |
+          steps.update.outputs.has_changes == 'true' &&
+          steps.verify.outputs.valid == 'true' &&
+          steps.action.outputs.auto_commit == 'true'
+        run: |
+          echo "Auto-committing to main branch..."
+          git push origin HEAD:main
+
+      - name: Create Pull Request
+        if: |
+          steps.update.outputs.has_changes == 'true' &&
+          steps.verify.outputs.valid == 'true' &&
+          steps.action.outputs.auto_commit == 'false'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: ${{ steps.summary.outputs.commit_title }}
+          branch: ${{ steps.commit.outputs.branch_name }}
+          title: ${{ steps.summary.outputs.commit_title }}
+          body-path: pr-body.txt
+          labels: |
+            automated
+            dependencies
+          assignees: ${{ github.repository_owner }}
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Update Releases Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.update.outputs.has_changes }}" = "true" ]; then
+            echo "✓ Changes detected and processed" >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ steps.verify.outputs.valid }}" = "true" ]; then
+              echo "✓ Verification passed - only releases.json modified" >> $GITHUB_STEP_SUMMARY
+
+              if [ "${{ steps.action.outputs.auto_commit }}" = "true" ]; then
+                echo "✓ Changes auto-committed to main branch" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "✓ Pull request created" >> $GITHUB_STEP_SUMMARY
+              fi
+            else
+              echo "✗ Verification failed - unexpected files modified" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "ℹ️ No changes detected - releases are up to date" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Update Log" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat update-output.log 2>/dev/null || echo "No update log available" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
